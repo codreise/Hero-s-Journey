@@ -5,6 +5,7 @@ import PotionIcon from "./PotionIcon";
 
 export default function GameUI({
   hp, maxHp, xp, level, coins, inventory, wave, xpNeeded,
+  countdownValue,
   gameOver, isPaused, levelUp, phase,
   onAttack, onTogglePause, onUseItem, onRestart, onHome,
 }) {
@@ -129,7 +130,7 @@ export default function GameUI({
 
       {phase === "countdown" && !gameOver && (
         <div className="rounded-xl border border-accent/40 bg-[linear-gradient(180deg,rgba(20,70,58,0.88),rgba(24,33,50,0.94))] px-4 py-3 text-center shadow-lg shadow-accent/10 backdrop-blur-sm">
-          <span className="font-pixel text-[10px] text-accent sm:text-xs">ПІДГОТОВКА ДО БОЮ · 3 СЕКУНДИ</span>
+          <span className="font-pixel text-[10px] text-accent sm:text-xs">ПІДГОТОВКА ДО БОЮ · {countdownValue || 0} СЕКУНДИ</span>
         </div>
       )}
 

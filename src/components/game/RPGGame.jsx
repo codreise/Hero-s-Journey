@@ -188,10 +188,12 @@ export default function RPGGame({
   const rafRef = useRef(null);
   const lastMoveRef = useRef(0);
   const projectilesRef = useRef([]);
+  const countdownValueRef = useRef(0);
   const floatTimeoutsRef = useRef([]);
   const countdownIntervalRef = useRef(null);
   const runCompleteRef = useRef(false);
 
+  const [runProfile] = useState(profile);
   const [uiState, setUiState] = useState(null);
   const [gameOver, setGameOver] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -245,6 +247,7 @@ export default function RPGGame({
 
   const startCountdown = useCallback((seconds = 3) => {
     clearCountdown();
+    countdownValueRef.current = seconds;
     setCountdownValue(seconds);
 
     countdownIntervalRef.current = window.setInterval(() => {
@@ -252,16 +255,19 @@ export default function RPGGame({
         if (currentValue <= 1) {
           window.clearInterval(countdownIntervalRef.current);
           countdownIntervalRef.current = null;
+          countdownValueRef.current = 0;
           return 0;
         }
 
-        return currentValue - 1;
+        const nextValue = currentValue - 1;
+        countdownValueRef.current = nextValue;
+        return nextValue;
       });
     }, 1000);
   }, [clearCountdown]);
 
   useEffect(() => {
-    const nextState = createGameState(initialState, profile);
+    const nextState = createGameState(initialState, runProfile);
     stateRef.current = nextState;
     runCompleteRef.current = false;
     setGameOver(false);
@@ -269,6 +275,7 @@ export default function RPGGame({
     setLevelUp(false);
     setFloats([]);
     setRewardSelectedId(nextState.rewardOptions[0]?.id || "");
+    countdownValueRef.current = 0;
     setCountdownValue(0);
     projectilesRef.current = [];
     syncUI(nextState);
@@ -276,7 +283,7 @@ export default function RPGGame({
     if (nextState.phase === "playing") {
       startCountdown(3);
     }
-  }, [initialState, persistState, profile, startCountdown, syncUI]);
+  }, [initialState, persistState, runProfile, startCountdown, syncUI]);
 
   function addFloat(text, color, x, y) {
     const id = Date.now() + Math.random();
@@ -293,6 +300,7 @@ export default function RPGGame({
   }, []);
 
   useEffect(() => () => {
+    countdownValueRef.current = 0;
     clearCountdown();
   }, [clearCountdown]);
 
@@ -825,11 +833,12 @@ export default function RPGGame({
       ctx.shadowBlur = 0;
 
       if (isCountdownActive && !gameOver) {
+        const visibleCountdownValue = countdownValueRef.current || countdownValue;
         ctx.fillStyle = "rgba(10, 8, 25, 0.72)";
         ctx.fillRect(0, 0, canvasSize.w, canvasSize.h);
         ctx.fillStyle = "#f4e6a1";
         ctx.font = "bold 38px sans-serif";
-        ctx.fillText(String(countdownValue), canvasSize.w / 2, canvasSize.h / 2 - 10);
+        ctx.fillText(String(visibleCountdownValue), canvasSize.w / 2, canvasSize.h / 2 - 10);
         ctx.font = "bold 14px sans-serif";
         ctx.fillText("Підготуйтеся до бою", canvasSize.w / 2, canvasSize.h / 2 + 24);
       } else if (isPaused && !gameOver) {
@@ -856,6 +865,7 @@ export default function RPGGame({
       {uiState && (
         <GameUI
           {...uiState}
+          countdownValue={countdownValue}
           gameOver={gameOver}
           isPaused={isPaused}
           levelUp={levelUp}
