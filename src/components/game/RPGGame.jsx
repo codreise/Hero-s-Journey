@@ -247,6 +247,7 @@ export default function RPGGame({
   const projectilesRef = useRef([]);
   const countdownValueRef = useRef(0);
   const renderPositionsRef = useRef({ player: { x: 2, y: 2 }, enemies: new Map() });
+  const screenShakeRef = useRef({ intensity: 0, expiresAt: 0 });
   const attackCooldownUntilRef = useRef(0);
   const damageCooldownUntilRef = useRef(0);
   const playerFlashUntilRef = useRef(0);
@@ -348,6 +349,7 @@ export default function RPGGame({
     damageCooldownUntilRef.current = 0;
     playerFlashUntilRef.current = 0;
     attackPulseRef.current = null;
+    screenShakeRef.current = { intensity: 0, expiresAt: 0 };
     renderPositionsRef.current = {
       player: { x: nextState.player.x, y: nextState.player.y },
       enemies: new Map(nextState.enemies.map((enemy) => [enemy.id, { x: enemy.x, y: enemy.y }])),
@@ -470,6 +472,13 @@ export default function RPGGame({
     return player.hp > 0 && player.hp <= Math.ceil(player.maxHp * 0.35);
   }, []);
 
+  const triggerScreenShake = useCallback((intensity = 4, duration = 110) => {
+    screenShakeRef.current = {
+      intensity,
+      expiresAt: performance.now() + duration,
+    };
+  }, []);
+
   const applyDamageToPlayer = useCallback((currentState, damage, color, yOffset = 0) => {
     const now = performance.now();
     if (now < damageCooldownUntilRef.current) {
@@ -479,6 +488,7 @@ export default function RPGGame({
     currentState.player.hp -= damage;
     damageCooldownUntilRef.current = now + 480;
     playerFlashUntilRef.current = now + 220;
+    triggerScreenShake(Math.min(8, 3 + damage * 0.35), 120);
     addFloat(`-${damage}`, color, currentState.player.x, currentState.player.y + yOffset);
 
     if (isTelegram) {
@@ -500,7 +510,7 @@ export default function RPGGame({
     }
 
     return true;
-  }, [consumeHealingPotion, hapticImpact, isTelegram, onClearSave, onRunComplete, shouldAutoHeal]);
+  }, [consumeHealingPotion, hapticImpact, isTelegram, onClearSave, onRunComplete, shouldAutoHeal, triggerScreenShake]);
 
   const movePlayer = useCallback((dir) => {
     const currentState = stateRef.current;
@@ -565,8 +575,10 @@ export default function RPGGame({
       x: target.x,
       y: target.y,
       critical: isCritical,
+      defeated: target.hp <= 0,
       expiresAt: now + 140,
     };
+    triggerScreenShake(isCritical ? 5 : 3, isCritical ? 110 : 80);
     addFloat(isCritical ? `КРИТ -${dmg}` : `-${dmg}`, isCritical ? "#ffd166" : "#ff4466", target.x, target.y);
     if (isTelegram) {
       hapticImpact(target.hp <= 0 ? "heavy" : "medium");
@@ -582,6 +594,7 @@ export default function RPGGame({
       }
       addFloat(`+${goldEarned}✦`, "#ffd700", target.x, target.y - 1);
       addFloat(`+${target.xp}XP`, "#88ffcc", target.x, target.y + 1);
+      triggerScreenShake(target.isBoss ? 8 : 4, target.isBoss ? 150 : 100);
 
       currentState.enemies = enemies.filter((enemy) => enemy.id !== target.id);
 
@@ -611,7 +624,7 @@ export default function RPGGame({
 
     persistState();
     syncUI();
-  }, [gameOver, hapticImpact, hapticNotification, isCountdownActive, isPaused, isTelegram, persistState, syncUI]);
+  }, [gameOver, hapticImpact, hapticNotification, isCountdownActive, isPaused, isTelegram, persistState, syncUI, triggerScreenShake]);
 
   const handleUseItem = useCallback((itemId) => {
     const currentState = stateRef.current;
@@ -789,6 +802,8 @@ export default function RPGGame({
         return;
       }
 
+      const now = performance.now();
+
       if (!gameOver && !isPaused && !isCountdownActive && currentState.phase === "playing") {
         let didStateChange = false;
         let shouldPersistAfterProjectiles = false;
@@ -865,6 +880,18 @@ export default function RPGGame({
             persistState(currentState);
           }
         }
+      }
+
+      const activeShake = screenShakeRef.current.expiresAt > now ? screenShakeRef.current : null;
+      const shakeX = activeShake ? (Math.random() - 0.5) * activeShake.intensity : 0;
+      const shakeY = activeShake ? (Math.random() - 0.5) * activeShake.intensity : 0;
+      if (activeShake && activeShake.expiresAt <= now) {
+        screenShakeRef.current = { intensity: 0, expiresAt: 0 };
+      }
+
+      ctx.save();
+      if (activeShake) {
+        ctx.translate(shakeX, shakeY);
       }
 
       ctx.fillStyle = FLOOR_COLOR;
@@ -945,16 +972,16 @@ export default function RPGGame({
       });
 
       const attackPulse = attackPulseRef.current;
-      if (attackPulse && attackPulse.expiresAt > performance.now()) {
+      if (attackPulse && attackPulse.expiresAt > now) {
         const pulseX = attackPulse.x * GRID + GRID / 2;
         const pulseY = attackPulse.y * GRID + GRID / 2;
         ctx.save();
-        ctx.strokeStyle = attackPulse.critical ? "#ffd166" : "#ff6b6b";
+        ctx.strokeStyle = attackPulse.defeated ? "#9cff57" : attackPulse.critical ? "#ffd166" : "#ff6b6b";
         ctx.lineWidth = attackPulse.critical ? 4 : 3;
-        ctx.shadowColor = attackPulse.critical ? "#ffd166" : "#ff6b6b";
-        ctx.shadowBlur = 14;
+        ctx.shadowColor = attackPulse.defeated ? "#9cff57" : attackPulse.critical ? "#ffd166" : "#ff6b6b";
+        ctx.shadowBlur = attackPulse.defeated ? 18 : 14;
         ctx.beginPath();
-        ctx.arc(pulseX, pulseY, attackPulse.critical ? 15 : 12, 0, Math.PI * 2);
+        ctx.arc(pulseX, pulseY, attackPulse.defeated ? 18 : attackPulse.critical ? 15 : 12, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
       } else if (attackPulse) {
@@ -967,7 +994,7 @@ export default function RPGGame({
       ctx.beginPath();
       ctx.ellipse(px, renderPositions.player.y * GRID + GRID - 2, 8, 3, 0, 0, Math.PI * 2);
       ctx.fill();
-      const isPlayerFlashing = playerFlashUntilRef.current > performance.now();
+      const isPlayerFlashing = playerFlashUntilRef.current > now;
       ctx.shadowColor = isPlayerFlashing ? "#ff8a65" : "#60e0ff";
       ctx.shadowBlur = isPlayerFlashing ? 18 : 10;
       if (isPlayerFlashing) {
@@ -982,20 +1009,22 @@ export default function RPGGame({
 
       if (isCountdownActive && !gameOver) {
         const visibleCountdownValue = countdownValueRef.current || countdownValue;
-        ctx.fillStyle = "rgba(10, 8, 25, 0.72)";
+        ctx.fillStyle = "rgba(10, 8, 25, 0.56)";
         ctx.fillRect(0, 0, canvasSize.w, canvasSize.h);
         ctx.fillStyle = "#f4e6a1";
-        ctx.font = "bold 38px sans-serif";
+        ctx.font = "bold 34px sans-serif";
         ctx.fillText(String(visibleCountdownValue), canvasSize.w / 2, canvasSize.h / 2 - 10);
-        ctx.font = "bold 14px sans-serif";
+        ctx.font = "bold 13px sans-serif";
         ctx.fillText("Підготуйтеся до бою", canvasSize.w / 2, canvasSize.h / 2 + 24);
       } else if (isPaused && !gameOver) {
-        ctx.fillStyle = "rgba(10, 8, 25, 0.62)";
+        ctx.fillStyle = "rgba(10, 8, 25, 0.46)";
         ctx.fillRect(0, 0, canvasSize.w, canvasSize.h);
         ctx.fillStyle = "#f4e6a1";
-        ctx.font = "bold 20px sans-serif";
+        ctx.font = "bold 18px sans-serif";
         ctx.fillText("Пауза", canvasSize.w / 2, canvasSize.h / 2);
       }
+
+      ctx.restore();
 
       rafRef.current = requestAnimationFrame(render);
     };
@@ -1062,7 +1091,7 @@ export default function RPGGame({
 
             {levelUp && uiState && (
               <div className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 animate-float">
-                <div className="rounded-xl border border-primary/60 bg-[linear-gradient(180deg,rgba(95,71,17,0.92),rgba(34,24,60,0.96))] px-4 py-2 text-center shadow-lg shadow-primary/20 backdrop-blur-sm">
+                <div className="rounded-full border border-primary/50 bg-[linear-gradient(180deg,rgba(95,71,17,0.78),rgba(34,24,60,0.9))] px-3 py-1.5 text-center shadow-lg shadow-primary/15 backdrop-blur-sm">
                   <span className="font-pixel text-[10px] text-primary sm:text-xs">⭐ РІВЕНЬ {uiState.level}! ⭐</span>
                 </div>
               </div>
@@ -1070,13 +1099,13 @@ export default function RPGGame({
 
             {uiState?.bossMaxHp > 0 && effectivePhase === "playing" && !gameOver && (
               <div className="pointer-events-none absolute left-3 right-3 top-3 z-20">
-                <div className="rounded-xl border border-destructive/35 bg-[linear-gradient(180deg,rgba(63,24,24,0.88),rgba(24,20,42,0.94))] px-3 py-3 shadow-lg shadow-destructive/10 backdrop-blur-sm">
+                <div className="rounded-full border border-destructive/30 bg-[linear-gradient(180deg,rgba(63,24,24,0.7),rgba(24,20,42,0.82))] px-3 py-2 shadow-lg shadow-destructive/10 backdrop-blur-sm">
                   <div className="flex items-center gap-2">
                     <span className="font-pixel text-[10px] text-destructive sm:text-xs">БОС</span>
                     <span className="truncate font-pixel text-[10px] text-foreground sm:text-xs">{uiState.bossName}</span>
                     <span className="ml-auto font-pixel text-[10px] text-muted-foreground sm:text-xs">{uiState.bossHp}/{uiState.bossMaxHp}</span>
                   </div>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full border border-black/20 bg-background/45">
+                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full border border-black/20 bg-background/45">
                     <div
                       className="h-full rounded-full bg-destructive transition-all"
                       style={{ width: `${Math.max(0, (uiState.bossHp / uiState.bossMaxHp) * 100)}%` }}
@@ -1088,22 +1117,20 @@ export default function RPGGame({
 
             {uiState && uiState.hp / uiState.maxHp <= 0.3 && effectivePhase === "playing" && !gameOver && (
               <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 -translate-x-1/2 px-3">
-                <div className="rounded-xl border border-destructive/40 bg-[linear-gradient(180deg,rgba(73,25,25,0.9),rgba(35,23,46,0.94))] px-4 py-2 text-center shadow-lg shadow-destructive/10 backdrop-blur-sm">
+                <div className="rounded-full border border-destructive/40 bg-[linear-gradient(180deg,rgba(73,25,25,0.82),rgba(35,23,46,0.9))] px-3 py-1.5 text-center shadow-lg shadow-destructive/10 backdrop-blur-sm">
                   <span className="font-pixel text-[10px] text-destructive sm:text-xs">
-                    {(uiState.inventory.find((item) => item.id === "potion")?.count || 0) <= 0 ? "КРИТИЧНЕ HP · ЗІЛЛЯ ЗАКІНЧИЛИСЯ" : "КРИТИЧНЕ HP · ЧАС ЛІКУВАТИСЯ"}
+                    {(uiState.inventory.find((item) => item.id === "potion")?.count || 0) <= 0 ? "КРИТИЧНЕ HP" : "ЛІКУЙСЯ"}
                   </span>
                 </div>
               </div>
             )}
 
             {currentPhase === "reward" && stateRef.current?.rewardOptions?.length > 0 && (
-              <div className="absolute inset-0 z-30 flex items-center justify-center bg-[rgba(10,8,25,0.86)] p-3 backdrop-blur-[2px] sm:p-4">
-                <div className="max-h-full w-full max-w-[380px] overflow-y-auto rounded-[24px] border border-primary/30 bg-[linear-gradient(180deg,rgba(63,45,19,0.96),rgba(28,20,52,0.96))] p-3 shadow-2xl shadow-black/50 sm:p-4">
+              <div className="absolute inset-0 z-30 flex items-center justify-center bg-[rgba(10,8,25,0.8)] p-3 backdrop-blur-[1.5px] sm:p-4">
+                <div className="max-h-full w-full max-w-[360px] overflow-y-auto rounded-[24px] border border-primary/30 bg-[linear-gradient(180deg,rgba(63,45,19,0.94),rgba(28,20,52,0.94))] p-3 shadow-2xl shadow-black/50 sm:p-4">
                   <div className="mb-3 text-center">
                     <p className="font-pixel text-xs text-primary drop-shadow-[0_0_10px_rgba(255,208,74,0.35)]">НАГОРОДА ЗА РАУНД</p>
-                    <p className="mt-2 font-pixel text-[10px] leading-5 text-muted-foreground">
-                      Оберіть бонус перед раундом {uiState ? uiState.wave + 1 : 2}
-                    </p>
+                    <p className="mt-2 font-pixel text-[10px] leading-5 text-muted-foreground">Оберіть бонус перед раундом {uiState ? uiState.wave + 1 : 2}</p>
                     <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
                       <span className="rounded-full border border-border/80 bg-background/40 px-3 py-1 font-pixel text-[9px] text-muted-foreground sm:text-[10px]">
                         Далі: раунд {uiState ? uiState.wave + 1 : 2}
@@ -1147,9 +1174,6 @@ export default function RPGGame({
                   </div>
 
                   <div className="mt-3 space-y-3">
-                    <p className="text-center font-pixel text-[10px] leading-5 text-muted-foreground">
-                      Вибрана нагорода застосовується одразу, після чого почнеться новий відлік до бою.
-                    </p>
                     <button
                       onClick={claimReward}
                       disabled={!rewardSelectedId}
@@ -1163,14 +1187,11 @@ export default function RPGGame({
             )}
 
             {currentPhase === "bossIntro" && (
-              <div className="absolute inset-0 z-30 flex items-center justify-center bg-[rgba(10,8,25,0.86)] p-4 backdrop-blur-[2px]">
-                <div className="w-full max-w-[360px] rounded-[24px] border border-destructive/30 bg-[linear-gradient(180deg,rgba(66,18,18,0.96),rgba(28,20,52,0.96))] p-4 text-center shadow-2xl shadow-black/50">
+              <div className="absolute inset-0 z-30 flex items-center justify-center bg-[rgba(10,8,25,0.8)] p-4 backdrop-blur-[1.5px]">
+                <div className="w-full max-w-[340px] rounded-[24px] border border-destructive/30 bg-[linear-gradient(180deg,rgba(66,18,18,0.94),rgba(28,20,52,0.94))] p-4 text-center shadow-2xl shadow-black/50">
                   <p className="font-pixel text-xs text-destructive">БИТВА З БОСОМ</p>
-                  <p className="mt-3 font-pixel text-[10px] leading-5 text-muted-foreground sm:text-xs">
-                    Раунд {uiState?.wave}. {uiState?.bossName || "Попереду сильний ворог"}.
-                  </p>
                   <p className="mt-2 font-pixel text-[10px] leading-5 text-muted-foreground sm:text-xs">
-                    {uiState?.bossSubtitle || "У боса підвищені HP, урон і нагорода."}
+                    {uiState?.bossName || "Попереду сильний ворог"}
                   </p>
                   <div className="mt-4 flex items-center justify-center gap-3 text-2xl">
                     <span

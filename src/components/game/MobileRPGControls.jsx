@@ -8,7 +8,7 @@ const REPEAT_INTERVAL = 95;
 const Btn = ({ children, className = "", disabled, onPressEnd, onPressStart }) => (
   <button
     disabled={disabled}
-    className={`flex items-center justify-center rounded-2xl border border-border bg-card/90 shadow-lg shadow-black/20 transition-all touch-none select-none active:bg-primary/30 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed ${className}`}
+    className={`flex items-center justify-center rounded-2xl border border-border/80 bg-card/80 shadow-lg shadow-black/15 transition-all touch-none select-none active:bg-primary/25 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed ${className}`}
     onPointerCancel={onPressEnd}
     onPointerDown={(e) => {
       e.preventDefault();
@@ -71,7 +71,7 @@ export default function MobileRPGControls({ disabled = false, hidden = false, he
 
   return (
     <div className="md:hidden mt-2 w-full shrink-0 pb-[calc(env(safe-area-inset-bottom,0px)+8px)]">
-      <div className="mx-auto flex max-w-[432px] items-end justify-between gap-3 rounded-[24px] border border-border/70 bg-card/85 px-2.5 py-2.5 shadow-2xl shadow-black/30 backdrop-blur">
+      <div className="mx-auto flex max-w-[408px] items-end justify-between gap-2.5 rounded-[24px] border border-border/60 bg-card/76 px-2 py-2 shadow-2xl shadow-black/25 backdrop-blur">
         <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
         <div />
         <Btn disabled={disabled} onPressEnd={clearTimers} onPressStart={() => startMove("up")} className="h-12 w-12 sm:h-14 sm:w-14">

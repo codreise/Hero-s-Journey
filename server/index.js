@@ -7,15 +7,52 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = Number(process.env.PORT || 3001);
-const DATA_DIR = path.join(__dirname, "data");
+const DATA_DIR = process.env.SAVE_DATA_DIR
+  ? path.resolve(process.cwd(), process.env.SAVE_DATA_DIR)
+  : path.join(__dirname, "data");
 const SAVE_FILE = path.join(DATA_DIR, "saves.json");
 
+function parseAllowedOrigins() {
+  return String(process.env.CORS_ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}
+
+const allowedOrigins = parseAllowedOrigins();
+
+function getCorsOrigin(requestOrigin) {
+  if (allowedOrigins.length === 0) {
+    return requestOrigin || "*";
+  }
+
+  if (allowedOrigins.includes("*")) {
+    return "*";
+  }
+
+  if (requestOrigin && allowedOrigins.includes(requestOrigin)) {
+    return requestOrigin;
+  }
+
+  return null;
+}
+
 function sendJson(response, statusCode, payload) {
+  const corsOrigin = getCorsOrigin(response.req?.headers?.origin);
+  if (response.req?.method !== "OPTIONS" && response.req?.headers?.origin && corsOrigin === null) {
+    response.writeHead(403, {
+      "Content-Type": "application/json; charset=utf-8",
+    });
+    response.end(JSON.stringify({ error: "Origin is not allowed" }));
+    return;
+  }
+
   response.writeHead(statusCode, {
     "Content-Type": "application/json; charset=utf-8",
-    "Access-Control-Allow-Origin": "*",
+    ...(corsOrigin ? { "Access-Control-Allow-Origin": corsOrigin } : {}),
     "Access-Control-Allow-Methods": "GET,PUT,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
+    "Vary": "Origin",
   });
   response.end(JSON.stringify(payload));
 }

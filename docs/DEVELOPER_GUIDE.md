@@ -100,6 +100,8 @@ VITE_BASE44_FUNCTIONS_VERSION=your_functions_version
 
 Ці значення читаються у [src/lib/app-params.js](../src/lib/app-params.js).
 
+Для Telegram, save-сервера і production-конфігурації дивись також [docs/DEPLOYMENT.md](./DEPLOYMENT.md) та приклад у `.env.example`.
+
 ## Структура коду
 
 - [src/pages/Game.jsx](../src/pages/Game.jsx) — головний екран гри, перехід між start/game, збереження

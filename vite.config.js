@@ -2,6 +2,16 @@ import base44 from "@base44/vite-plugin"
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
+function parseCsvEnv(value) {
+  return String(value || "")
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
+
+const allowedHosts = parseCsvEnv(process.env.DEV_ALLOWED_HOSTS)
+const saveServerUrl = process.env.SAVE_SERVER_URL || 'http://localhost:3001'
+
 // https://vite.dev/config/
 export default defineConfig({
   logLevel: 'error', // Suppress warnings, only show errors
@@ -16,13 +26,10 @@ export default defineConfig({
     react(),
   ],
   server: {
-    // Дозволяємо доступ із ngrok-доменів
-    allowedHosts: [
-      'lizeth-crossable-nondespotically.ngrok-free.dev'
-    ],
+    allowedHosts: allowedHosts.length > 0 ? allowedHosts : true,
     proxy: {
       '/game-api': {
-        target: 'http://localhost:3001',
+        target: saveServerUrl,
         changeOrigin: true,
       }
     }

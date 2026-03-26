@@ -66,7 +66,7 @@ const ENEMY_ARCHETYPES = {
     behavior: "hunter",
     aggroRange: 6,
     moveInterval: [38, 52],
-    unlockWave: 2,
+    unlockWave: 3,
   },
   wolf: {
     id: "wolf",
@@ -80,7 +80,7 @@ const ENEMY_ARCHETYPES = {
     behavior: "hunter",
     aggroRange: 7,
     moveInterval: [28, 38],
-    unlockWave: 4,
+    unlockWave: 5,
   },
   shaman: {
     id: "shaman",
@@ -504,7 +504,12 @@ export function createEnemy(id, x, y, wave = 1, forcedArchetypeId = null) {
   const archetype = forcedArchetypeId && ENEMY_ARCHETYPES[forcedArchetypeId]
     ? ENEMY_ARCHETYPES[forcedArchetypeId]
     : pickEnemyArchetype(wave, id);
-  const scale = 1 + (wave - 1) * 0.16;
+  const healthScale = wave <= 4
+    ? 1 + (wave - 1) * 0.1
+    : 1.3 + (wave - 4) * 0.14;
+  const attackScale = wave <= 4
+    ? 1 + (wave - 1) * 0.07
+    : 1.21 + (wave - 4) * 0.1;
 
   return {
     id,
@@ -513,9 +518,9 @@ export function createEnemy(id, x, y, wave = 1, forcedArchetypeId = null) {
     archetypeId: archetype.id,
     behavior: archetype.behavior,
     aggroRange: archetype.aggroRange,
-    hp: Math.floor(archetype.hp * scale),
-    maxHp: Math.floor(archetype.hp * scale),
-    atk: Math.max(1, Math.floor(archetype.atk * (1 + (wave - 1) * 0.12))),
+    hp: Math.floor(archetype.hp * healthScale),
+    maxHp: Math.floor(archetype.hp * healthScale),
+    atk: Math.max(1, Math.floor(archetype.atk * attackScale)),
     xp: Math.max(1, Math.floor(archetype.xp * (1 + (wave - 1) * 0.08))),
     coinDrop: Math.max(1, Math.floor(archetype.coins * (1 + (wave - 1) * 0.1))),
     name: archetype.name,
@@ -575,7 +580,8 @@ export function spawnWaveEnemies(map, player, wave) {
     return [createBossEnemy(0, player, wave)];
   }
 
-  return spawnEnemies(map, player, Math.min(5 + wave, 12), wave);
+  const enemyCount = Math.min(4 + Math.floor(wave * 0.8), 11);
+  return spawnEnemies(map, player, enemyCount, wave);
 }
 
 export function generateMap() {
@@ -653,6 +659,10 @@ export function awardExperience(player, amount) {
 export function generateRewardChoices(player, wave) {
   const rewardPool = ["attack_boost", "max_hp", "coins", "xp_burst", "potion", "heal_small"];
   const guaranteedRewards = [];
+
+  if (wave <= 3) {
+    guaranteedRewards.push("heal_small");
+  }
 
   if (player.hp <= Math.ceil(player.maxHp * 0.4)) {
     guaranteedRewards.push("heal_full");

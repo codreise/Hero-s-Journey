@@ -40,6 +40,7 @@ npm run server
 
 - [docs/USER_GUIDE.md](docs/USER_GUIDE.md) — коротка інструкція для гравця або тестувальника
 - [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) — технічний запуск, скрипти, Telegram, структура проєкту
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — підготовка до production і мінімальний план деплою
 - [docs/screenshots/README.md](docs/screenshots/README.md) — місце для скріншотів і приклад, як їх оформити
 
 ## Telegram-бот
