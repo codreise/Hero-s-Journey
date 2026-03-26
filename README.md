@@ -42,6 +42,18 @@ npm run server
 - [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) — технічний запуск, скрипти, Telegram, структура проєкту
 - [docs/screenshots/README.md](docs/screenshots/README.md) — місце для скріншотів і приклад, як їх оформити
 
+## Telegram-бот
+
+У репозиторії є мінімальний бот у [bot/index.js](bot/index.js), який після `/start` або `/play` надсилає повідомлення з inline-кнопкою Грати.
+
+Запуск:
+
+```powershell
+$env:BOT_TOKEN="your_bot_token"
+$env:WEB_APP_URL="https://your-mini-app-url"
+npm run bot
+```
+
 ## Основні механіки
 
 - Хвильовий бій: кожна хвиля завершується після знищення всіх ворогів.

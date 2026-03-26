@@ -33,6 +33,14 @@ npm run dev
 npm run server
 ```
 
+4. За потреби запустити Telegram-бота з кнопкою в чаті:
+
+```powershell
+$env:BOT_TOKEN="your_bot_token"
+$env:WEB_APP_URL="https://your-mini-app-url"
+npm run bot
+```
+
 Фронтенд за замовчуванням працює на `http://localhost:5173`.
 
 Save-сервер за замовчуванням працює на `http://localhost:3001`.
@@ -72,6 +80,7 @@ ngrok http 5173
 ```powershell
 npm run dev
 npm run server
+npm run bot
 npm run build
 npm run preview
 npm run lint
@@ -98,6 +107,7 @@ VITE_BASE44_FUNCTIONS_VERSION=your_functions_version
 - [src/components/game/RPGGame.jsx](../src/components/game/RPGGame.jsx) — рендер, цикл бою, canvas, боси, снаряди
 - [src/components/game/useRPGState.jsx](../src/components/game/useRPGState.jsx) — стейт, вороги, боси, нагороди, мета-прогрес
 - [server/index.js](../server/index.js) — локальний save-сервер
+- [bot/index.js](../bot/index.js) — мінімальний Telegram-бот, який надсилає стартове повідомлення з inline-кнопкою Грати
 
 ## Поточні правила збереження
 
