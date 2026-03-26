@@ -26,7 +26,7 @@ export default function StartScreen({
           <div className="space-y-2">
             <h1 className="font-pixel text-xl leading-relaxed text-foreground sm:text-2xl">Hero’s Journey</h1>
             <p className="mx-auto max-w-lg font-pixel text-[10px] leading-5 text-muted-foreground sm:text-xs">
-              Короткі забіги, хвилі ворогів, боси та постійний прогрес між спробами.
+              Короткі забіги, раунди ворогів, боси та постійний прогрес між спробами.
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
@@ -85,7 +85,7 @@ export default function StartScreen({
 
             <div className="mt-3 grid grid-cols-3 gap-2 text-center">
               <div className="rounded-xl bg-background/50 px-2 py-3">
-                <p className="font-pixel text-[9px] text-muted-foreground">Хвиля</p>
+                <p className="font-pixel text-[9px] text-muted-foreground">Раунд</p>
                 <p className="mt-1 font-pixel text-[11px] text-foreground">{safeProfile.bestWave}</p>
               </div>
               <div className="rounded-xl bg-background/50 px-2 py-3">
@@ -103,7 +103,7 @@ export default function StartScreen({
                 <p className="font-pixel text-[10px] text-primary sm:text-xs">Останній забіг</p>
                 <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2 font-pixel text-[10px] text-muted-foreground sm:text-xs">
                   <span>Рівень {savedGame.player.level}</span>
-                  <span>Хвиля {savedGame.wave}</span>
+                  <span>Раунд {savedGame.wave}</span>
                   <span>{savedGame.player.coins} монет</span>
                 </div>
               </div>

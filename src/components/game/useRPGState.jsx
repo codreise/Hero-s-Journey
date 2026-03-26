@@ -133,18 +133,18 @@ const BOSS_ARCHETYPES = [
     name: "Вождь печерних огрів",
     emoji: "👹",
     color: "#bb55ff",
-    hp: 54,
-    atk: 9,
+    hp: 48,
+    atk: 8,
     xp: 90,
     coins: 26,
     behavior: "brute",
     aggroRange: 7,
     moveInterval: [28, 34],
     projectileColor: "#ff7a18",
-    projectileSpeed: 2.6,
-    projectileDamage: 7,
+    projectileSpeed: 2.5,
+    projectileDamage: 6,
     projectileRange: 8,
-    projectileInterval: [58, 72],
+    projectileInterval: [70, 84],
     subtitle: "Повільний, але дуже витривалий бос з важкими ударами і вогняними ядрами.",
   },
   {
@@ -153,18 +153,18 @@ const BOSS_ARCHETYPES = [
     name: "Пекельний змій",
     emoji: "🐉",
     color: "#ff6633",
-    hp: 72,
-    atk: 12,
+    hp: 66,
+    atk: 10,
     xp: 130,
     coins: 38,
     behavior: "hunter",
     aggroRange: 9,
     moveInterval: [20, 28],
     projectileColor: "#ff4d6d",
-    projectileSpeed: 3.4,
-    projectileDamage: 9,
+    projectileSpeed: 3.1,
+    projectileDamage: 7,
     projectileRange: 10,
-    projectileInterval: [42, 54],
+    projectileInterval: [54, 66],
     subtitle: "Швидко скорочує дистанцію, плюється полум'ям і карає за паузу.",
   },
   {
@@ -173,18 +173,18 @@ const BOSS_ARCHETYPES = [
     name: "Ліч безодні",
     emoji: "☠️",
     color: "#60e0ff",
-    hp: 82,
-    atk: 14,
+    hp: 76,
+    atk: 12,
     xp: 165,
     coins: 48,
     behavior: "skirmisher",
     aggroRange: 9,
     moveInterval: [18, 26],
     projectileColor: "#60e0ff",
-    projectileSpeed: 3,
-    projectileDamage: 10,
+    projectileSpeed: 2.8,
+    projectileDamage: 8,
     projectileRange: 11,
-    projectileInterval: [36, 48],
+    projectileInterval: [48, 60],
     subtitle: "Тримає дистанцію, засипає арену магічними снарядами і б'є болючіше за звичайних босів.",
   },
 ];
@@ -440,7 +440,7 @@ export function applyRunResultsToProfile(profile, runState) {
   const coins = Math.max(0, toPositiveInt(runState?.player?.coins, 0));
   const bossesDefeated = Math.max(0, toPositiveInt(runState?.stats?.bossesDefeated, 0));
   const enemiesDefeated = Math.max(0, toPositiveInt(runState?.stats?.enemiesDefeated, 0));
-  const essenceEarned = Math.max(1, Math.floor(coins / 18) + Math.floor(wave / 2) + bossesDefeated + Math.floor(enemiesDefeated / 12));
+  const essenceEarned = getRunEssenceReward(runState);
 
   return {
     ...nextProfile,
@@ -450,6 +450,14 @@ export function applyRunResultsToProfile(profile, runState) {
     runsPlayed: nextProfile.runsPlayed + 1,
     bossesDefeated: nextProfile.bossesDefeated + bossesDefeated,
   };
+}
+
+export function getRunEssenceReward(runState) {
+  const wave = Math.max(1, toPositiveInt(runState?.wave, 1));
+  const coins = Math.max(0, toPositiveInt(runState?.player?.coins, 0));
+  const bossesDefeated = Math.max(0, toPositiveInt(runState?.stats?.bossesDefeated, 0));
+  const enemiesDefeated = Math.max(0, toPositiveInt(runState?.stats?.enemiesDefeated, 0));
+  return Math.max(1, Math.floor(coins / 18) + Math.floor(wave / 2) + bossesDefeated + Math.floor(enemiesDefeated / 12));
 }
 
 export function getScaledCoinAmount(baseAmount, player) {
@@ -526,7 +534,7 @@ export function isBossWave(wave) {
 
 export function createBossEnemy(id, player, wave) {
   const boss = getBossArchetype(wave);
-  const scale = 1 + (wave - boss.minWave) * 0.12;
+  const scale = 1 + (wave - boss.minWave) * 0.09;
   const nextBoss = {
     id,
     x: COLS - 4,
@@ -536,7 +544,7 @@ export function createBossEnemy(id, player, wave) {
     aggroRange: boss.aggroRange,
     hp: Math.floor(boss.hp * scale),
     maxHp: Math.floor(boss.hp * scale),
-    atk: Math.max(1, Math.floor(boss.atk * (1 + (wave - boss.minWave) * 0.08))),
+    atk: Math.max(1, Math.floor(boss.atk * (1 + (wave - boss.minWave) * 0.06))),
     xp: Math.floor(boss.xp * scale),
     coinDrop: Math.floor(boss.coins * scale),
     name: boss.name,
@@ -547,7 +555,7 @@ export function createBossEnemy(id, player, wave) {
     projectileTimer: 0,
     projectileInterval: randomInRange(boss.projectileInterval[0], boss.projectileInterval[1]),
     projectileSpeed: boss.projectileSpeed,
-    projectileDamage: Math.max(1, Math.floor(boss.projectileDamage * (1 + (wave - boss.minWave) * 0.06))),
+    projectileDamage: Math.max(1, Math.floor(boss.projectileDamage * (1 + (wave - boss.minWave) * 0.04))),
     projectileRange: boss.projectileRange,
     projectileColor: boss.projectileColor,
     isBoss: true,

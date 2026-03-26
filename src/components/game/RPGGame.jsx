@@ -7,6 +7,7 @@ import {
   createGameState,
   createSaveSnapshot,
   generateRewardChoices,
+  getRunEssenceReward,
   getScaledCoinAmount,
   GRID,
   isBossWave,
@@ -32,31 +33,87 @@ const MOVE_DIRECTIONS = [
   { dx: 1, dy: 0 },
 ];
 
-function createBossProjectile(enemy, player) {
+function interpolatePosition(currentValue, targetValue, smoothing = 0.24) {
+  if (Math.abs(targetValue - currentValue) < 0.001) {
+    return targetValue;
+  }
+
+  return currentValue + (targetValue - currentValue) * smoothing;
+}
+
+function getBossShotPlan(enemy, player) {
+  const deltaX = player.x - enemy.x;
+  const deltaY = player.y - enemy.y;
+  const useHorizontalAxis = Math.abs(deltaX) >= Math.abs(deltaY);
+
+  return {
+    axis: useHorizontalAxis ? "horizontal" : "vertical",
+    direction: useHorizontalAxis ? Math.sign(deltaX || 1) : Math.sign(deltaY || 1),
+  };
+}
+
+function createBossProjectile(enemy, player, shotPlan = null) {
   const sourceX = enemy.x * GRID + GRID / 2;
   const sourceY = enemy.y * GRID + GRID / 2;
-  const targetX = player.x * GRID + GRID / 2;
-  const targetY = player.y * GRID + GRID / 2;
-  const deltaX = targetX - sourceX;
-  const deltaY = targetY - sourceY;
+  const resolvedShotPlan = shotPlan || getBossShotPlan(enemy, player);
+  const axisSpeed = enemy.projectileSpeed || 2.8;
+  const deltaX = resolvedShotPlan.axis === "horizontal" ? resolvedShotPlan.direction * axisSpeed : 0;
+  const deltaY = resolvedShotPlan.axis === "vertical" ? resolvedShotPlan.direction * axisSpeed : 0;
   const distance = Math.hypot(deltaX, deltaY) || 1;
-  const speed = enemy.projectileSpeed || 2.8;
 
   return {
     id: `${enemy.id}-${Date.now()}-${Math.random()}`,
     x: sourceX,
     y: sourceY,
-    vx: (deltaX / distance) * speed,
-    vy: (deltaY / distance) * speed,
+    vx: deltaX / distance * axisSpeed,
+    vy: deltaY / distance * axisSpeed,
     color: enemy.projectileColor || enemy.color || "#ff7a18",
     damage: enemy.projectileDamage || Math.max(1, enemy.atk - 1),
     life: Math.max(GRID * 6, (enemy.projectileRange || 8) * GRID),
   };
 }
 
-function drawBoss(ctx, enemy) {
-  const ex = enemy.x * GRID + GRID / 2;
-  const ey = enemy.y * GRID + GRID / 2;
+function drawBossTelegraph(ctx, enemy, map, renderX = enemy.x, renderY = enemy.y) {
+  const shotPlan = enemy.projectileCharge;
+  if (!shotPlan) {
+    return;
+  }
+
+  const startX = renderX * GRID + GRID / 2;
+  const startY = renderY * GRID + GRID / 2;
+  let endX = startX;
+  let endY = startY;
+
+  if (shotPlan.axis === "horizontal") {
+    let nextX = enemy.x;
+    while (!isWall(map, nextX + shotPlan.direction, enemy.y)) {
+      nextX += shotPlan.direction;
+    }
+    endX = nextX * GRID + GRID / 2;
+  } else {
+    let nextY = enemy.y;
+    while (!isWall(map, enemy.x, nextY + shotPlan.direction)) {
+      nextY += shotPlan.direction;
+    }
+    endY = nextY * GRID + GRID / 2;
+  }
+
+  const pulse = 0.45 + ((shotPlan.framesLeft % 10) / 18);
+  ctx.save();
+  ctx.strokeStyle = `rgba(255, 140, 60, ${pulse})`;
+  ctx.lineWidth = 5;
+  ctx.shadowColor = enemy.projectileColor || enemy.color || "#ff7a18";
+  ctx.shadowBlur = 16;
+  ctx.beginPath();
+  ctx.moveTo(startX, startY);
+  ctx.lineTo(endX, endY);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawBoss(ctx, enemy, renderX = enemy.x, renderY = enemy.y) {
+  const ex = renderX * GRID + GRID / 2;
+  const ey = renderY * GRID + GRID / 2;
   const auraColor = enemy.projectileColor || enemy.color || "#ff7a18";
 
   ctx.save();
@@ -64,7 +121,7 @@ function drawBoss(ctx, enemy) {
   ctx.shadowBlur = 18;
   ctx.fillStyle = "rgba(0,0,0,0.34)";
   ctx.beginPath();
-  ctx.ellipse(ex, enemy.y * GRID + GRID - 1, 10, 4, 0, 0, Math.PI * 2);
+  ctx.ellipse(ex, renderY * GRID + GRID - 1, 10, 4, 0, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.fillStyle = auraColor;
@@ -189,6 +246,11 @@ export default function RPGGame({
   const lastMoveRef = useRef(0);
   const projectilesRef = useRef([]);
   const countdownValueRef = useRef(0);
+  const renderPositionsRef = useRef({ player: { x: 2, y: 2 }, enemies: new Map() });
+  const attackCooldownUntilRef = useRef(0);
+  const damageCooldownUntilRef = useRef(0);
+  const playerFlashUntilRef = useRef(0);
+  const attackPulseRef = useRef(null);
   const floatTimeoutsRef = useRef([]);
   const countdownIntervalRef = useRef(null);
   const runCompleteRef = useRef(false);
@@ -221,11 +283,17 @@ export default function RPGGame({
       maxHp: currentState.player.maxHp,
       xp: currentState.player.xp,
       level: currentState.player.level,
+      attack: currentState.player.atk,
       coins: currentState.player.coins,
       inventory: [...currentState.player.inventory],
       wave: currentState.wave,
+      enemiesLeft: currentState.enemies.length,
       bossName: currentState.bossPreview?.name || currentState.enemies.find((enemy) => enemy.isBoss)?.name || "",
       bossSubtitle: currentState.bossPreview?.subtitle || "",
+      bossHp: currentState.enemies.find((enemy) => enemy.isBoss)?.hp || 0,
+      bossMaxHp: currentState.enemies.find((enemy) => enemy.isBoss)?.maxHp || 0,
+      stats: { ...currentState.stats },
+      essenceReward: getRunEssenceReward(currentState),
       xpNeeded: xpToNextLevel(currentState.player.level),
     });
   }, []);
@@ -276,6 +344,14 @@ export default function RPGGame({
     setFloats([]);
     setRewardSelectedId(nextState.rewardOptions[0]?.id || "");
     countdownValueRef.current = 0;
+    attackCooldownUntilRef.current = 0;
+    damageCooldownUntilRef.current = 0;
+    playerFlashUntilRef.current = 0;
+    attackPulseRef.current = null;
+    renderPositionsRef.current = {
+      player: { x: nextState.player.x, y: nextState.player.y },
+      enemies: new Map(nextState.enemies.map((enemy) => [enemy.id, { x: enemy.x, y: enemy.y }])),
+    };
     setCountdownValue(0);
     projectilesRef.current = [];
     syncUI(nextState);
@@ -301,6 +377,7 @@ export default function RPGGame({
 
   useEffect(() => () => {
     countdownValueRef.current = 0;
+    attackPulseRef.current = null;
     clearCountdown();
   }, [clearCountdown]);
 
@@ -393,6 +470,38 @@ export default function RPGGame({
     return player.hp > 0 && player.hp <= Math.ceil(player.maxHp * 0.35);
   }, []);
 
+  const applyDamageToPlayer = useCallback((currentState, damage, color, yOffset = 0) => {
+    const now = performance.now();
+    if (now < damageCooldownUntilRef.current) {
+      return false;
+    }
+
+    currentState.player.hp -= damage;
+    damageCooldownUntilRef.current = now + 480;
+    playerFlashUntilRef.current = now + 220;
+    addFloat(`-${damage}`, color, currentState.player.x, currentState.player.y + yOffset);
+
+    if (isTelegram) {
+      hapticImpact(currentState.player.hp <= 0 ? "heavy" : "medium");
+    }
+
+    if (shouldAutoHeal(currentState.player)) {
+      consumeHealingPotion(currentState, { auto: true });
+    }
+
+    if (currentState.player.hp <= 0) {
+      currentState.player.hp = 0;
+      if (!runCompleteRef.current) {
+        runCompleteRef.current = true;
+        onRunComplete?.(createSaveSnapshot(currentState));
+      }
+      setGameOver(true);
+      onClearSave?.();
+    }
+
+    return true;
+  }, [consumeHealingPotion, hapticImpact, isTelegram, onClearSave, onRunComplete, shouldAutoHeal]);
+
   const movePlayer = useCallback((dir) => {
     const currentState = stateRef.current;
     if (!currentState || gameOver || isPaused || isCountdownActive || currentState.phase !== "playing") {
@@ -431,16 +540,34 @@ export default function RPGGame({
       return;
     }
 
+    const now = performance.now();
+    if (now < attackCooldownUntilRef.current) {
+      return;
+    }
+    attackCooldownUntilRef.current = now + 220;
+
     const { player, enemies } = currentState;
     const adjacent = enemies.filter((enemy) => Math.abs(enemy.x - player.x) + Math.abs(enemy.y - player.y) <= 1);
     if (adjacent.length === 0) {
       return;
     }
 
-    const target = adjacent[0];
-    const dmg = player.atk + Math.floor(Math.random() * 3);
+    const target = adjacent.sort((left, right) => {
+      if (left.isBoss !== right.isBoss) {
+        return Number(right.isBoss) - Number(left.isBoss);
+      }
+      return left.hp - right.hp;
+    })[0];
+    const isCritical = Math.random() < 0.18;
+    const dmg = player.atk + Math.floor(Math.random() * 3) + (isCritical ? 2 : 0);
     target.hp -= dmg;
-    addFloat(`-${dmg}`, "#ff4466", target.x, target.y);
+    attackPulseRef.current = {
+      x: target.x,
+      y: target.y,
+      critical: isCritical,
+      expiresAt: now + 140,
+    };
+    addFloat(isCritical ? `КРИТ -${dmg}` : `-${dmg}`, isCritical ? "#ffd166" : "#ff4466", target.x, target.y);
     if (isTelegram) {
       hapticImpact(target.hp <= 0 ? "heavy" : "medium");
     }
@@ -486,7 +613,7 @@ export default function RPGGame({
     syncUI();
   }, [gameOver, hapticImpact, hapticNotification, isCountdownActive, isPaused, isTelegram, persistState, syncUI]);
 
-  const useItem = useCallback((itemId) => {
+  const handleUseItem = useCallback((itemId) => {
     const currentState = stateRef.current;
     if (!currentState || gameOver || isPaused || isCountdownActive || currentState.phase !== "playing") {
       return;
@@ -669,12 +796,23 @@ export default function RPGGame({
         currentState.enemies.forEach((enemy) => {
           enemy.moveTimer += 1;
           if (enemy.isBoss && enemy.projectileInterval) {
-            enemy.projectileTimer = (enemy.projectileTimer || 0) + 1;
             const distanceToPlayer = Math.abs(enemy.x - currentState.player.x) + Math.abs(enemy.y - currentState.player.y);
 
-            if (distanceToPlayer <= (enemy.projectileRange || 8) && enemy.projectileTimer >= enemy.projectileInterval) {
-              enemy.projectileTimer = 0;
-              projectilesRef.current.push(createBossProjectile(enemy, currentState.player));
+            if (enemy.projectileCharge) {
+              enemy.projectileCharge.framesLeft -= 1;
+              if (enemy.projectileCharge.framesLeft <= 0) {
+                projectilesRef.current.push(createBossProjectile(enemy, currentState.player, enemy.projectileCharge));
+                enemy.projectileCharge = null;
+              }
+            } else {
+              enemy.projectileTimer = (enemy.projectileTimer || 0) + 1;
+              if (distanceToPlayer <= (enemy.projectileRange || 8) && enemy.projectileTimer >= enemy.projectileInterval) {
+                enemy.projectileTimer = 0;
+                enemy.projectileCharge = {
+                  ...getBossShotPlan(enemy, currentState.player),
+                  framesLeft: 22,
+                };
+              }
             }
           }
 
@@ -689,27 +827,7 @@ export default function RPGGame({
 
             if (Math.abs(enemy.x - currentState.player.x) + Math.abs(enemy.y - currentState.player.y) === 1) {
               const dmg = enemy.atk + Math.floor(Math.random() * 2);
-              currentState.player.hp -= dmg;
-              addFloat(`-${dmg}`, "#ff8844", currentState.player.x, currentState.player.y);
-              if (isTelegram) {
-                hapticImpact(currentState.player.hp <= 0 ? "heavy" : "medium");
-              }
-
-              if (shouldAutoHeal(currentState.player)) {
-                consumeHealingPotion(currentState, { auto: true });
-              }
-
-              didStateChange = true;
-
-              if (currentState.player.hp <= 0) {
-                currentState.player.hp = 0;
-                if (!runCompleteRef.current) {
-                  runCompleteRef.current = true;
-                  onRunComplete?.(createSaveSnapshot(currentState));
-                }
-                setGameOver(true);
-                onClearSave?.();
-              }
+              didStateChange = applyDamageToPlayer(currentState, dmg, "#ff8844") || didStateChange;
             }
           }
         });
@@ -731,28 +849,8 @@ export default function RPGGame({
 
             const playerDistance = Math.hypot(projectile.x - playerCenterX, projectile.y - playerCenterY);
             if (playerDistance <= GRID * 0.33) {
-              currentState.player.hp -= projectile.damage;
-              addFloat(`-${projectile.damage}`, projectile.color, currentState.player.x, currentState.player.y - 0.35);
-              if (isTelegram) {
-                hapticImpact(currentState.player.hp <= 0 ? "heavy" : "medium");
-              }
-
-              if (shouldAutoHeal(currentState.player)) {
-                consumeHealingPotion(currentState, { auto: true });
-              }
-
-              didStateChange = true;
+              didStateChange = applyDamageToPlayer(currentState, projectile.damage, projectile.color, -0.35) || didStateChange;
               shouldPersistAfterProjectiles = true;
-
-              if (currentState.player.hp <= 0) {
-                currentState.player.hp = 0;
-                if (!runCompleteRef.current) {
-                  runCompleteRef.current = true;
-                  onRunComplete?.(createSaveSnapshot(currentState));
-                }
-                setGameOver(true);
-                onClearSave?.();
-              }
 
               return false;
             }
@@ -772,6 +870,26 @@ export default function RPGGame({
       ctx.fillStyle = FLOOR_COLOR;
       ctx.fillRect(0, 0, canvasSize.w, canvasSize.h);
 
+      const renderPositions = renderPositionsRef.current;
+      renderPositions.player.x = interpolatePosition(renderPositions.player.x, currentState.player.x, 0.28);
+      renderPositions.player.y = interpolatePosition(renderPositions.player.y, currentState.player.y, 0.28);
+
+      const activeEnemyIds = new Set();
+      currentState.enemies.forEach((enemy) => {
+        activeEnemyIds.add(enemy.id);
+        const currentRenderPosition = renderPositions.enemies.get(enemy.id) || { x: enemy.x, y: enemy.y };
+        const smoothing = enemy.isBoss ? 0.18 : 0.24;
+        currentRenderPosition.x = interpolatePosition(currentRenderPosition.x, enemy.x, smoothing);
+        currentRenderPosition.y = interpolatePosition(currentRenderPosition.y, enemy.y, smoothing);
+        renderPositions.enemies.set(enemy.id, currentRenderPosition);
+      });
+
+      Array.from(renderPositions.enemies.keys()).forEach((enemyId) => {
+        if (!activeEnemyIds.has(enemyId)) {
+          renderPositions.enemies.delete(enemyId);
+        }
+      });
+
       for (let r = 0; r < ROWS; r += 1) {
         for (let c = 0; c < COLS; c += 1) {
           const x = c * GRID;
@@ -790,14 +908,22 @@ export default function RPGGame({
       }
 
       currentState.enemies.forEach((enemy) => {
-        const ex = enemy.x * GRID + GRID / 2;
-        const ey = enemy.y * GRID + GRID / 2;
+        if (enemy.isBoss && enemy.projectileCharge) {
+          const renderEnemy = renderPositions.enemies.get(enemy.id) || { x: enemy.x, y: enemy.y };
+          drawBossTelegraph(ctx, enemy, currentState.map, renderEnemy.x, renderEnemy.y);
+        }
+      });
+
+      currentState.enemies.forEach((enemy) => {
+        const renderEnemy = renderPositions.enemies.get(enemy.id) || { x: enemy.x, y: enemy.y };
+        const ex = renderEnemy.x * GRID + GRID / 2;
+        const ey = renderEnemy.y * GRID + GRID / 2;
         if (enemy.isBoss) {
-          drawBoss(ctx, enemy);
+          drawBoss(ctx, enemy, renderEnemy.x, renderEnemy.y);
         } else {
           ctx.fillStyle = "rgba(0,0,0,0.3)";
           ctx.beginPath();
-          ctx.ellipse(ex, enemy.y * GRID + GRID - 2, 7, 3, 0, 0, Math.PI * 2);
+          ctx.ellipse(ex, renderEnemy.y * GRID + GRID - 2, 7, 3, 0, 0, Math.PI * 2);
           ctx.fill();
           ctx.font = `${GRID - 4}px serif`;
           ctx.textAlign = "center";
@@ -806,8 +932,8 @@ export default function RPGGame({
         }
         const bw = GRID - 2;
         const bh = 3;
-        const bx = enemy.x * GRID + 1;
-        const by = enemy.y * GRID - 5;
+        const bx = renderEnemy.x * GRID + 1;
+        const by = renderEnemy.y * GRID - 5;
         ctx.fillStyle = "#333";
         ctx.fillRect(bx, by, bw, bh);
         ctx.fillStyle = enemy.hp / enemy.maxHp > 0.5 ? "#44ff88" : enemy.hp / enemy.maxHp > 0.25 ? "#ffcc00" : "#ff4444";
@@ -818,18 +944,40 @@ export default function RPGGame({
         drawProjectile(ctx, projectile);
       });
 
-      const px = currentState.player.x * GRID + GRID / 2;
-      const py = currentState.player.y * GRID + GRID / 2;
+      const attackPulse = attackPulseRef.current;
+      if (attackPulse && attackPulse.expiresAt > performance.now()) {
+        const pulseX = attackPulse.x * GRID + GRID / 2;
+        const pulseY = attackPulse.y * GRID + GRID / 2;
+        ctx.save();
+        ctx.strokeStyle = attackPulse.critical ? "#ffd166" : "#ff6b6b";
+        ctx.lineWidth = attackPulse.critical ? 4 : 3;
+        ctx.shadowColor = attackPulse.critical ? "#ffd166" : "#ff6b6b";
+        ctx.shadowBlur = 14;
+        ctx.beginPath();
+        ctx.arc(pulseX, pulseY, attackPulse.critical ? 15 : 12, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      } else if (attackPulse) {
+        attackPulseRef.current = null;
+      }
+
+      const px = renderPositions.player.x * GRID + GRID / 2;
+      const py = renderPositions.player.y * GRID + GRID / 2;
       ctx.fillStyle = "rgba(0,0,0,0.3)";
       ctx.beginPath();
-      ctx.ellipse(px, currentState.player.y * GRID + GRID - 2, 8, 3, 0, 0, Math.PI * 2);
+      ctx.ellipse(px, renderPositions.player.y * GRID + GRID - 2, 8, 3, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.shadowColor = "#60e0ff";
-      ctx.shadowBlur = 10;
+      const isPlayerFlashing = playerFlashUntilRef.current > performance.now();
+      ctx.shadowColor = isPlayerFlashing ? "#ff8a65" : "#60e0ff";
+      ctx.shadowBlur = isPlayerFlashing ? 18 : 10;
+      if (isPlayerFlashing) {
+        ctx.globalAlpha = 0.72;
+      }
       ctx.font = `${GRID - 2}px serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText("🧙", px, py);
+      ctx.globalAlpha = 1;
       ctx.shadowBlur = 0;
 
       if (isCountdownActive && !gameOver) {
@@ -858,21 +1006,20 @@ export default function RPGGame({
         cancelAnimationFrame(rafRef.current);
       }
     };
-  }, [canvasSize.h, canvasSize.w, consumeHealingPotion, gameOver, hapticImpact, isCountdownActive, isPaused, isTelegram, onClearSave, onRunComplete, persistState, shouldAutoHeal, syncUI]);
+  }, [applyDamageToPlayer, canvasSize.h, canvasSize.w, gameOver, isCountdownActive, isPaused, persistState, syncUI]);
 
   return (
     <div className="flex h-full min-h-0 w-full max-w-[560px] flex-col gap-3 pb-[calc(env(safe-area-inset-bottom,0px)+6px)]">
       {uiState && (
         <GameUI
           {...uiState}
-          countdownValue={countdownValue}
           gameOver={gameOver}
           isPaused={isPaused}
           levelUp={levelUp}
           phase={effectivePhase}
           onAttack={attack}
           onTogglePause={togglePause}
-          onUseItem={useItem}
+          onUseItem={handleUseItem}
           onRestart={onRestart}
           onHome={handleHome}
         />
@@ -913,14 +1060,60 @@ export default function RPGGame({
               </div>
             ))}
 
+            {levelUp && uiState && (
+              <div className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 animate-float">
+                <div className="rounded-xl border border-primary/60 bg-[linear-gradient(180deg,rgba(95,71,17,0.92),rgba(34,24,60,0.96))] px-4 py-2 text-center shadow-lg shadow-primary/20 backdrop-blur-sm">
+                  <span className="font-pixel text-[10px] text-primary sm:text-xs">⭐ РІВЕНЬ {uiState.level}! ⭐</span>
+                </div>
+              </div>
+            )}
+
+            {uiState?.bossMaxHp > 0 && effectivePhase === "playing" && !gameOver && (
+              <div className="pointer-events-none absolute left-3 right-3 top-3 z-20">
+                <div className="rounded-xl border border-destructive/35 bg-[linear-gradient(180deg,rgba(63,24,24,0.88),rgba(24,20,42,0.94))] px-3 py-3 shadow-lg shadow-destructive/10 backdrop-blur-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="font-pixel text-[10px] text-destructive sm:text-xs">БОС</span>
+                    <span className="truncate font-pixel text-[10px] text-foreground sm:text-xs">{uiState.bossName}</span>
+                    <span className="ml-auto font-pixel text-[10px] text-muted-foreground sm:text-xs">{uiState.bossHp}/{uiState.bossMaxHp}</span>
+                  </div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full border border-black/20 bg-background/45">
+                    <div
+                      className="h-full rounded-full bg-destructive transition-all"
+                      style={{ width: `${Math.max(0, (uiState.bossHp / uiState.bossMaxHp) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {uiState && uiState.hp / uiState.maxHp <= 0.3 && effectivePhase === "playing" && !gameOver && (
+              <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 -translate-x-1/2 px-3">
+                <div className="rounded-xl border border-destructive/40 bg-[linear-gradient(180deg,rgba(73,25,25,0.9),rgba(35,23,46,0.94))] px-4 py-2 text-center shadow-lg shadow-destructive/10 backdrop-blur-sm">
+                  <span className="font-pixel text-[10px] text-destructive sm:text-xs">
+                    {(uiState.inventory.find((item) => item.id === "potion")?.count || 0) <= 0 ? "КРИТИЧНЕ HP · ЗІЛЛЯ ЗАКІНЧИЛИСЯ" : "КРИТИЧНЕ HP · ЧАС ЛІКУВАТИСЯ"}
+                  </span>
+                </div>
+              </div>
+            )}
+
             {currentPhase === "reward" && stateRef.current?.rewardOptions?.length > 0 && (
               <div className="absolute inset-0 z-30 flex items-center justify-center bg-[rgba(10,8,25,0.86)] p-3 backdrop-blur-[2px] sm:p-4">
                 <div className="max-h-full w-full max-w-[380px] overflow-y-auto rounded-[24px] border border-primary/30 bg-[linear-gradient(180deg,rgba(63,45,19,0.96),rgba(28,20,52,0.96))] p-3 shadow-2xl shadow-black/50 sm:p-4">
                   <div className="mb-3 text-center">
-                    <p className="font-pixel text-xs text-primary drop-shadow-[0_0_10px_rgba(255,208,74,0.35)]">НАГОРОДА ЗА ХВИЛЮ</p>
+                    <p className="font-pixel text-xs text-primary drop-shadow-[0_0_10px_rgba(255,208,74,0.35)]">НАГОРОДА ЗА РАУНД</p>
                     <p className="mt-2 font-pixel text-[10px] leading-5 text-muted-foreground">
-                      Оберіть бонус перед хвилею {uiState ? uiState.wave + 1 : 2}
+                      Оберіть бонус перед раундом {uiState ? uiState.wave + 1 : 2}
                     </p>
+                    <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                      <span className="rounded-full border border-border/80 bg-background/40 px-3 py-1 font-pixel text-[9px] text-muted-foreground sm:text-[10px]">
+                        Далі: раунд {uiState ? uiState.wave + 1 : 2}
+                      </span>
+                      {isBossWave((uiState ? uiState.wave : 1) + 1) && (
+                        <span className="rounded-full border border-destructive/40 bg-destructive/10 px-3 py-1 font-pixel text-[9px] text-destructive sm:text-[10px]">
+                          Наступний бій з босом
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="grid gap-2">
@@ -939,6 +1132,11 @@ export default function RPGGame({
                           <div className="flex items-center gap-2">
                             <span className="text-lg">{reward.emoji}</span>
                             <span className="font-pixel text-[10px] text-foreground sm:text-xs">{reward.title}</span>
+                            {isSelected && (
+                              <span className="ml-auto rounded-full border border-primary/30 bg-primary/10 px-2 py-1 font-pixel text-[8px] text-primary sm:text-[9px]">
+                                ВИБРАНО
+                              </span>
+                            )}
                           </div>
                           <p className="mt-3 font-pixel text-[10px] leading-5 text-muted-foreground">
                             {reward.description}
@@ -950,7 +1148,7 @@ export default function RPGGame({
 
                   <div className="mt-3 space-y-3">
                     <p className="text-center font-pixel text-[10px] leading-5 text-muted-foreground">
-                      Виберіть нагороду і натисніть кнопку нижче.
+                      Вибрана нагорода застосовується одразу, після чого почнеться новий відлік до бою.
                     </p>
                     <button
                       onClick={claimReward}
@@ -969,7 +1167,7 @@ export default function RPGGame({
                 <div className="w-full max-w-[360px] rounded-[24px] border border-destructive/30 bg-[linear-gradient(180deg,rgba(66,18,18,0.96),rgba(28,20,52,0.96))] p-4 text-center shadow-2xl shadow-black/50">
                   <p className="font-pixel text-xs text-destructive">БИТВА З БОСОМ</p>
                   <p className="mt-3 font-pixel text-[10px] leading-5 text-muted-foreground sm:text-xs">
-                    Хвиля {uiState?.wave}. {uiState?.bossName || "Попереду сильний ворог"}.
+                    Раунд {uiState?.wave}. {uiState?.bossName || "Попереду сильний ворог"}.
                   </p>
                   <p className="mt-2 font-pixel text-[10px] leading-5 text-muted-foreground sm:text-xs">
                     {uiState?.bossSubtitle || "У боса підвищені HP, урон і нагорода."}
@@ -1003,12 +1201,8 @@ export default function RPGGame({
         healingItem={uiState?.inventory?.find((item) => item.id === "potion") || null}
         onMove={movePlayer}
         onAttack={attack}
-        onUseHeal={() => useItem("potion")}
+        onUseHeal={() => handleUseItem("potion")}
       />
-
-      <p className={`px-2 text-center font-pixel text-[10px] leading-5 text-muted-foreground sm:text-xs ${hasScreenOverlay ? "opacity-0 pointer-events-none" : ""}`}>
-        Стрілки/WASD = рух · Пробіл/Z = удар · Esc/P = пауза
-      </p>
     </div>
   );
 }

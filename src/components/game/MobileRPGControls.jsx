@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Heart, Sword } from "lucide-react";
+import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sword } from "lucide-react";
 import PotionIcon from "./PotionIcon";
 
 const REPEAT_DELAY = 260;
