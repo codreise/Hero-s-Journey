@@ -12,14 +12,14 @@ const TelegramMiniAppContext = createContext({
   viewportHeight: 0,
   viewportStableHeight: 0,
   isExpanded: false,
-  hapticImpact: () => {},
-  hapticNotification: () => {},
+  hapticImpact: (_style = "light") => {},
+  hapticNotification: (_type = "success") => {},
   hapticSelection: () => {},
-  setMainButton: () => {},
+  setMainButton: (_options = {}) => {},
   hideMainButton: () => {},
-  setBackButton: () => {},
+  setBackButton: (_options = {}) => {},
   hideBackButton: () => {},
-  openLink: () => {},
+  openLink: (_url = "") => {},
   close: () => {},
 });
 
@@ -28,7 +28,8 @@ function getTelegramWebApp() {
     return null;
   }
 
-  return window.Telegram?.WebApp ?? null;
+  const telegramWindow = /** @type {Window & typeof globalThis & { Telegram?: { WebApp?: any } }} */ (window);
+  return telegramWindow.Telegram?.WebApp ?? null;
 }
 
 function isTelegramVersionAtLeast(webApp, targetVersion) {

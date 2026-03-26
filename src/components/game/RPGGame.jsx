@@ -26,6 +26,8 @@ const FLOOR_COLOR = "#1a1040";
 const WALL_COLOR = "#3a2870";
 const WALL_TOP = "#5540a0";
 const GRID_COLOR = "#221550";
+const EMOJI_FONT_STACK = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
+const emojiSpriteCache = new Map();
 const MOVE_DIRECTIONS = [
   { dx: 0, dy: -1 },
   { dx: 0, dy: 1 },
@@ -39,6 +41,142 @@ function interpolatePosition(currentValue, targetValue, smoothing = 0.24) {
   }
 
   return currentValue + (targetValue - currentValue) * smoothing;
+}
+
+function createSpriteFromSvg(key, svg) {
+  const image = new Image();
+  image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  emojiSpriteCache.set(key, image);
+  return image;
+}
+
+function getEmojiSprite(emoji) {
+  if (!emoji) {
+    return null;
+  }
+
+  if (emojiSpriteCache.has(emoji)) {
+    return emojiSpriteCache.get(emoji);
+  }
+
+  if (emoji === "🐀") {
+    return createSpriteFromSvg(emoji, `
+      <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+        <defs>
+          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="1.2" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+        <path d="M47 36 C56 39, 60 45, 55 51" fill="none" stroke="#f59eaf" stroke-width="3.2" stroke-linecap="round"/>
+        <ellipse cx="31" cy="35" rx="16" ry="10.5" fill="#9ca3af" filter="url(#glow)"/>
+        <ellipse cx="20" cy="31" rx="8.5" ry="7" fill="#9ca3af"/>
+        <circle cx="17" cy="24" r="3.5" fill="#cbd5e1"/>
+        <circle cx="24" cy="23" r="3" fill="#cbd5e1"/>
+        <circle cx="18.5" cy="31" r="1.5" fill="#111827"/>
+        <circle cx="12.5" cy="34" r="1.8" fill="#fda4af"/>
+      </svg>
+    `);
+  }
+
+  if (emoji === "☠️") {
+    return createSpriteFromSvg(emoji, `
+      <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+        <circle cx="32" cy="28" r="15" fill="#f3f4f6"/>
+        <rect x="22" y="39" width="20" height="11" rx="4" fill="#f3f4f6"/>
+        <circle cx="26" cy="28" r="4.2" fill="#111827"/>
+        <circle cx="38" cy="28" r="4.2" fill="#111827"/>
+        <path d="M32 30 L28.5 36 H35.5 Z" fill="#4b5563"/>
+        <path d="M22 44 H42" stroke="#9ca3af" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M26 44 V49 M32 44 V50 M38 44 V49" stroke="#9ca3af" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    `);
+  }
+
+  if (emoji === "🐺") {
+    return createSpriteFromSvg(emoji, `
+      <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+        <path d="M18 42 L16 24 L26 18 L32 22 L39 18 L48 24 L46 42 Z" fill="#64748b"/>
+        <path d="M22 18 L27 8 L31 20 Z M42 18 L37 8 L33 20 Z" fill="#94a3b8"/>
+        <circle cx="27" cy="31" r="2.2" fill="#111827"/>
+        <circle cx="37" cy="31" r="2.2" fill="#111827"/>
+        <path d="M32 34 L28 39 H36 Z" fill="#1f2937"/>
+        <path d="M28 40 Q32 44 36 40" stroke="#cbd5e1" stroke-width="2" fill="none" stroke-linecap="round"/>
+      </svg>
+    `);
+  }
+
+  if (emoji === "🧙") {
+    return createSpriteFromSvg(emoji, `
+      <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+        <path d="M32 10 L46 27 H36 L43 48 H21 L28 27 H18 Z" fill="#22c55e"/>
+        <circle cx="32" cy="28" r="8.5" fill="#f5d0a9"/>
+        <path d="M24 24 Q32 17 40 24" stroke="#166534" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <circle cx="29" cy="29" r="1.7" fill="#111827"/>
+        <circle cx="35" cy="29" r="1.7" fill="#111827"/>
+        <circle cx="46" cy="18" r="4" fill="#86efac" opacity="0.9"/>
+      </svg>
+    `);
+  }
+
+  if (emoji === "🗿") {
+    return createSpriteFromSvg(emoji, `
+      <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+        <rect x="18" y="12" width="28" height="40" rx="8" fill="#a16207"/>
+        <rect x="22" y="18" width="20" height="26" rx="6" fill="#ca8a04"/>
+        <path d="M26 27 H30 M34 27 H38" stroke="#451a03" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M32 28 V38" stroke="#78350f" stroke-width="3" stroke-linecap="round"/>
+        <path d="M26 42 Q32 45 38 42" stroke="#451a03" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+      </svg>
+    `);
+  }
+
+  if (emoji === "🦇") {
+    return createSpriteFromSvg(emoji, `
+      <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+        <path d="M10 34 Q18 20 28 28 Q32 16 36 28 Q46 20 54 34 Q45 32 40 40 Q36 34 32 42 Q28 34 24 40 Q18 32 10 34 Z" fill="#a855f7"/>
+        <circle cx="32" cy="31" r="5" fill="#7e22ce"/>
+        <circle cx="29.5" cy="31" r="1.2" fill="#f8fafc"/>
+        <circle cx="34.5" cy="31" r="1.2" fill="#f8fafc"/>
+      </svg>
+    `);
+  }
+
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+      <text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" font-size="48" font-family=${JSON.stringify(EMOJI_FONT_STACK)}>
+        ${emoji}
+      </text>
+    </svg>
+  `;
+  const image = new Image();
+  image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  emojiSpriteCache.set(emoji, image);
+  return image;
+}
+
+function getEnemyRenderStyle(enemy) {
+  const glowColor = enemy.color || "#ffffff";
+
+  switch (enemy.archetypeId) {
+    case "rat":
+      return { glowColor, shadowBlur: 7, auraFill: "rgba(148, 163, 184, 0.08)", outlineColor: "rgba(226, 232, 240, 0.24)", radius: 8, fontSize: GRID - 7, emojiOffsetY: 0.5 };
+    case "skeleton":
+      return { glowColor, shadowBlur: 10, auraFill: "rgba(229, 231, 235, 0.14)", outlineColor: "rgba(255, 255, 255, 0.52)", radius: 9, fontSize: GRID - 5, emojiOffsetY: 0 };
+    case "wolf":
+      return { glowColor, shadowBlur: 12, auraFill: "rgba(100, 116, 139, 0.14)", outlineColor: "rgba(191, 219, 254, 0.4)", radius: 9, fontSize: GRID - 4, emojiOffsetY: 0.5 };
+    case "shaman":
+      return { glowColor, shadowBlur: 14, auraFill: "rgba(34, 197, 94, 0.16)", outlineColor: "rgba(187, 247, 208, 0.46)", radius: 9, fontSize: GRID - 5, emojiOffsetY: -0.5 };
+    case "brute":
+      return { glowColor, shadowBlur: 9, auraFill: "rgba(161, 98, 7, 0.18)", outlineColor: "rgba(253, 224, 71, 0.4)", radius: 10, fontSize: GRID - 3, emojiOffsetY: 0 };
+    case "bat":
+      return { glowColor, shadowBlur: 13, auraFill: "rgba(168, 85, 247, 0.15)", outlineColor: "rgba(233, 213, 255, 0.42)", radius: 8.5, fontSize: GRID - 6, emojiOffsetY: -0.5 };
+    default:
+      return { glowColor, shadowBlur: 9, auraFill: "rgba(255, 255, 255, 0.12)", outlineColor: "rgba(255, 255, 255, 0.32)", radius: 8.5, fontSize: GRID - 5, emojiOffsetY: 0 };
+  }
 }
 
 function getBossShotPlan(enemy, player) {
@@ -115,6 +253,7 @@ function drawBoss(ctx, enemy, renderX = enemy.x, renderY = enemy.y) {
   const ex = renderX * GRID + GRID / 2;
   const ey = renderY * GRID + GRID / 2;
   const auraColor = enemy.projectileColor || enemy.color || "#ff7a18";
+  const bossColor = enemy.color || "#bb55ff";
 
   ctx.save();
   ctx.shadowColor = auraColor;
@@ -131,7 +270,7 @@ function drawBoss(ctx, enemy, renderX = enemy.x, renderY = enemy.y) {
   ctx.fill();
   ctx.globalAlpha = 1;
 
-  ctx.fillStyle = enemy.color || "#bb55ff";
+  ctx.fillStyle = bossColor;
   ctx.beginPath();
   ctx.arc(ex, ey + 1, GRID * 0.34, 0, Math.PI * 2);
   ctx.fill();
@@ -154,10 +293,66 @@ function drawBoss(ctx, enemy, renderX = enemy.x, renderY = enemy.y) {
   ctx.closePath();
   ctx.fill();
 
-  ctx.fillStyle = auraColor;
-  ctx.beginPath();
-  ctx.arc(ex, ey + 6, 4, 0, Math.PI);
-  ctx.fill();
+  if (enemy.bossId === "ogre_chief") {
+    ctx.fillStyle = bossColor;
+    ctx.beginPath();
+    ctx.moveTo(ex - 10, ey - 6);
+    ctx.lineTo(ex - 15, ey - 14);
+    ctx.lineTo(ex - 7, ey - 10);
+    ctx.closePath();
+    ctx.moveTo(ex + 10, ey - 6);
+    ctx.lineTo(ex + 15, ey - 14);
+    ctx.lineTo(ex + 7, ey - 10);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = auraColor;
+    ctx.beginPath();
+    ctx.roundRect(ex - 5, ey + 4, 10, 6, 2);
+    ctx.fill();
+  } else if (enemy.bossId === "wyrm") {
+    ctx.strokeStyle = bossColor;
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(ex - 11, ey + 5);
+    ctx.quadraticCurveTo(ex - 2, ey + 12, ex + 8, ey + 8);
+    ctx.stroke();
+
+    ctx.fillStyle = "#ffd166";
+    ctx.beginPath();
+    ctx.arc(ex - 4, ey - 1, 1.1, 0, Math.PI * 2);
+    ctx.arc(ex + 4, ey - 1, 1.1, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (enemy.bossId === "lich") {
+    ctx.fillStyle = "rgba(148, 163, 184, 0.9)";
+    ctx.beginPath();
+    ctx.moveTo(ex - 9, ey - 6);
+    ctx.lineTo(ex - 6, ey - 14);
+    ctx.lineTo(ex - 1, ey - 8);
+    ctx.lineTo(ex + 2, ey - 15);
+    ctx.lineTo(ex + 6, ey - 8);
+    ctx.lineTo(ex + 10, ey - 13);
+    ctx.lineTo(ex + 9, ey - 5);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = auraColor;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ex - 8, ey + 4);
+    ctx.lineTo(ex - 4, ey + 11);
+    ctx.moveTo(ex, ey + 5);
+    ctx.lineTo(ex, ey + 12);
+    ctx.moveTo(ex + 8, ey + 4);
+    ctx.lineTo(ex + 4, ey + 11);
+    ctx.stroke();
+  } else {
+    ctx.fillStyle = auraColor;
+    ctx.beginPath();
+    ctx.arc(ex, ey + 6, 4, 0, Math.PI);
+    ctx.fill();
+  }
   ctx.restore();
 }
 
@@ -948,14 +1143,37 @@ export default function RPGGame({
         if (enemy.isBoss) {
           drawBoss(ctx, enemy, renderEnemy.x, renderEnemy.y);
         } else {
+          const renderStyle = getEnemyRenderStyle(enemy);
+
+          ctx.save();
           ctx.fillStyle = "rgba(0,0,0,0.3)";
           ctx.beginPath();
           ctx.ellipse(ex, renderEnemy.y * GRID + GRID - 2, 7, 3, 0, 0, Math.PI * 2);
           ctx.fill();
-          ctx.font = `${GRID - 4}px serif`;
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillText(enemy.emoji, ex, ey);
+
+          ctx.fillStyle = renderStyle.auraFill;
+          ctx.strokeStyle = renderStyle.outlineColor;
+          ctx.lineWidth = 1.2;
+          ctx.shadowColor = renderStyle.glowColor;
+          ctx.shadowBlur = renderStyle.shadowBlur;
+          ctx.beginPath();
+          ctx.arc(ex, ey, renderStyle.radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          const emojiSprite = getEmojiSprite(enemy.emoji);
+          const spriteSize = renderStyle.fontSize + 6;
+          const emojiY = ey + (renderStyle.emojiOffsetY || 0);
+
+          if (emojiSprite?.complete && emojiSprite.naturalWidth > 0) {
+            ctx.drawImage(emojiSprite, ex - spriteSize / 2, emojiY - spriteSize / 2, spriteSize, spriteSize);
+          } else {
+            ctx.font = `${renderStyle.fontSize}px ${EMOJI_FONT_STACK}`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(enemy.emoji, ex, emojiY);
+          }
+          ctx.restore();
         }
         const bw = GRID - 2;
         const bh = 3;

@@ -40,11 +40,11 @@ export const META_UPGRADES = {
 };
 
 const ENEMY_ARCHETYPES = {
-  slime: {
-    id: "slime",
-    name: "Слиз",
-    emoji: "🟢",
-    color: "#44ff88",
+  rat: {
+    id: "rat",
+    name: "Пацюк-падальник",
+    emoji: "🐀",
+    color: "#8b949e",
     hp: 8,
     atk: 2,
     xp: 10,
@@ -57,8 +57,8 @@ const ENEMY_ARCHETYPES = {
   skeleton: {
     id: "skeleton",
     name: "Скелет",
-    emoji: "💀",
-    color: "#cccccc",
+    emoji: "☠️",
+    color: "#e5e7eb",
     hp: 13,
     atk: 4,
     xp: 18,
@@ -72,7 +72,7 @@ const ENEMY_ARCHETYPES = {
     id: "wolf",
     name: "Тіньовий вовк",
     emoji: "🐺",
-    color: "#9ca3af",
+    color: "#64748b",
     hp: 11,
     atk: 5,
     xp: 20,
@@ -85,8 +85,8 @@ const ENEMY_ARCHETYPES = {
   shaman: {
     id: "shaman",
     name: "Болотний шаман",
-    emoji: "🧟",
-    color: "#7dd3fc",
+    emoji: "🧙",
+    color: "#22c55e",
     hp: 10,
     atk: 6,
     xp: 24,
@@ -99,8 +99,8 @@ const ENEMY_ARCHETYPES = {
   brute: {
     id: "brute",
     name: "Кам'яний громила",
-    emoji: "🪨",
-    color: "#c084fc",
+    emoji: "🗿",
+    color: "#a16207",
     hp: 22,
     atk: 7,
     xp: 30,
@@ -114,7 +114,7 @@ const ENEMY_ARCHETYPES = {
     id: "bat",
     name: "Печерний нетопир",
     emoji: "🦇",
-    color: "#f9a8d4",
+    color: "#a855f7",
     hp: 9,
     atk: 5,
     xp: 21,
@@ -132,7 +132,7 @@ const BOSS_ARCHETYPES = [
     minWave: 5,
     name: "Вождь печерних огрів",
     emoji: "👹",
-    color: "#bb55ff",
+    color: "#ef4444",
     hp: 48,
     atk: 8,
     xp: 90,
@@ -152,7 +152,7 @@ const BOSS_ARCHETYPES = [
     minWave: 10,
     name: "Пекельний змій",
     emoji: "🐉",
-    color: "#ff6633",
+    color: "#f97316",
     hp: 66,
     atk: 10,
     xp: 130,
@@ -171,8 +171,8 @@ const BOSS_ARCHETYPES = [
     id: "lich",
     minWave: 15,
     name: "Ліч безодні",
-    emoji: "☠️",
-    color: "#60e0ff",
+    emoji: "🧛",
+    color: "#38bdf8",
     hp: 76,
     atk: 12,
     xp: 165,
@@ -260,7 +260,7 @@ function pickEnemyArchetype(wave, spawnIndex = 0) {
     return availableArchetypes[Math.min(spawnIndex, availableArchetypes.length - 1)];
   }
 
-  return weightedPool[Math.floor(Math.random() * weightedPool.length)] || ENEMY_ARCHETYPES.slime;
+  return weightedPool[Math.floor(Math.random() * weightedPool.length)] || ENEMY_ARCHETYPES.rat;
 }
 
 function getBossArchetype(wave) {
@@ -580,7 +580,7 @@ export function spawnWaveEnemies(map, player, wave) {
     return [createBossEnemy(0, player, wave)];
   }
 
-  const enemyCount = Math.min(4 + Math.floor(wave * 0.8), 11);
+  const enemyCount = Math.min(4 + Math.floor(wave * 0.8) + (wave >= 3 ? 1 : 0), 12);
   return spawnEnemies(map, player, enemyCount, wave);
 }
 
