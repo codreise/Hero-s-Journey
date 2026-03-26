@@ -1,0 +1,115 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Press+Start+2P&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+	:root {
+		--font-pixel: "Press Start 2P", cursive;
+		--font-inter: "Inter", sans-serif;
+		--background: 252 44% 10%;
+		--foreground: 240 33% 96%;
+		--card: 251 39% 16%;
+		--card-foreground: 240 33% 96%;
+		--popover: 251 39% 16%;
+		--popover-foreground: 240 33% 96%;
+		--primary: 44 96% 58%;
+		--primary-foreground: 252 44% 10%;
+		--secondary: 188 95% 68%;
+		--secondary-foreground: 252 44% 10%;
+		--muted: 252 30% 22%;
+		--muted-foreground: 245 15% 72%;
+		--accent: 144 80% 58%;
+		--accent-foreground: 252 44% 10%;
+		--destructive: 0 84% 62%;
+		--destructive-foreground: 240 33% 96%;
+		--border: 252 29% 28%;
+		--input: 252 29% 28%;
+		--ring: 44 96% 58%;
+		--radius: 1rem;
+		--chart-1: 44 96% 58%;
+		--chart-2: 188 95% 68%;
+		--chart-3: 144 80% 58%;
+		--chart-4: 15 90% 64%;
+		--chart-5: 280 75% 70%;
+		--sidebar-background: 251 39% 16%;
+		--sidebar-foreground: 240 33% 96%;
+		--sidebar-primary: 44 96% 58%;
+		--sidebar-primary-foreground: 252 44% 10%;
+		--sidebar-accent: 252 30% 22%;
+		--sidebar-accent-foreground: 240 33% 96%;
+		--sidebar-border: 252 29% 28%;
+		--sidebar-ring: 44 96% 58%;
+	}
+
+	* {
+		@apply border-border;
+	}
+
+	html {
+		height: 100%;
+		min-height: 100%;
+		overscroll-behavior: none;
+	}
+
+	body {
+		min-height: 100vh;
+		min-height: 100svh;
+		min-height: 100dvh;
+		min-height: 100%;
+		@apply bg-background text-foreground font-inter antialiased;
+		background-image:
+			radial-gradient(circle at top, hsl(252 62% 20%), transparent 40%),
+			radial-gradient(circle at bottom, hsl(228 55% 14%), transparent 35%),
+			linear-gradient(180deg, hsl(252 44% 10%), hsl(245 41% 8%));
+		overflow-x: hidden;
+		overscroll-behavior-y: none;
+		touch-action: manipulation;
+	}
+
+	#root {
+		min-height: 100vh;
+		min-height: 100svh;
+		min-height: 100dvh;
+		min-height: var(--tg-stable-viewport-height, var(--tg-viewport-height, 100dvh));
+	}
+
+	.app-shell {
+		min-height: 100vh;
+		min-height: 100svh;
+		min-height: 100dvh;
+		min-height: var(--tg-stable-viewport-height, var(--tg-viewport-height, 100dvh));
+	}
+
+	.game-screen {
+		overflow: hidden;
+		padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+	}
+
+	html.telegram-game-active,
+	body.telegram-game-active {
+		height: var(--tg-stable-viewport-height, var(--tg-viewport-height, 100dvh));
+		max-height: var(--tg-stable-viewport-height, var(--tg-viewport-height, 100dvh));
+		overflow: hidden;
+	}
+
+	body.telegram-game-active {
+		position: relative;
+	}
+
+	.telegram-game-shell {
+		position: fixed;
+		inset: 0;
+		height: var(--tg-stable-viewport-height, var(--tg-viewport-height, 100dvh));
+		max-height: var(--tg-stable-viewport-height, var(--tg-viewport-height, 100dvh));
+		overflow: hidden;
+		padding-top: max(0.5rem, env(safe-area-inset-top, 0px));
+		padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+	}
+
+	button,
+	canvas {
+		-webkit-tap-highlight-color: transparent;
+	}
+}
