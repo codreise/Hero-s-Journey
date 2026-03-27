@@ -2,7 +2,7 @@
 
 export const GRID = 24;
 export const COLS = 18;
-export const ROWS = 14;
+export const ROWS = 16;
 export const MAX_LEVEL = 5;
 
 export const TILE = {

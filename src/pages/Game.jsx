@@ -224,9 +224,9 @@ export default function Game() {
 
   return (
     <div
-      className={`app-shell bg-background flex w-full justify-center px-2 sm:px-4 ${
+      className={`app-shell bg-background flex w-full justify-center px-1 sm:px-2 lg:px-3 ${
         screen === "game"
-          ? "game-screen items-stretch py-2 sm:items-center sm:py-4"
+          ? "game-screen items-stretch py-0 sm:items-center sm:py-2"
           : "items-center py-4"
       } ${isTelegramGameScreen ? "telegram-game-shell" : ""}`}
     >

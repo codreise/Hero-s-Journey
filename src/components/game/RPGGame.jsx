@@ -595,7 +595,7 @@ export default function RPGGame({
         return;
       }
 
-      const fittedWidth = Math.min(nextWidth, nextHeight * canvasAspectRatio, canvasSize.w);
+      const fittedWidth = Math.min(nextWidth, nextHeight * canvasAspectRatio);
       const fittedHeight = fittedWidth / canvasAspectRatio;
       const roundedWidth = Math.max(1, Math.floor(fittedWidth));
       const roundedHeight = Math.max(1, Math.floor(fittedHeight));
@@ -1256,7 +1256,7 @@ export default function RPGGame({
   }, [applyDamageToPlayer, canvasSize.h, canvasSize.w, gameOver, isCountdownActive, isPaused, persistState, syncUI]);
 
   return (
-    <div className="flex h-full min-h-0 w-full max-w-[560px] flex-col gap-3 pb-[calc(env(safe-area-inset-bottom,0px)+6px)]">
+    <div className="flex h-full min-h-0 w-full max-w-[920px] flex-col gap-0.5 pb-[calc(env(safe-area-inset-bottom,0px)+1px)] sm:gap-2.5 lg:max-w-[1040px]">
       {uiState && (
         <GameUI
           {...uiState}
@@ -1272,7 +1272,7 @@ export default function RPGGame({
         />
       )}
 
-      <div className="w-full flex-1 min-h-0 rounded-2xl border border-border bg-card/40 p-2 shadow-xl shadow-black/20 sm:p-3">
+      <div className="w-full flex-1 min-h-0 rounded-2xl border border-border bg-card/40 p-0 shadow-xl shadow-black/20 sm:p-2.5 lg:p-3">
         <div ref={canvasViewportRef} className="flex h-full min-h-0 items-center justify-center">
           <div
             className="relative overflow-hidden rounded-xl"
@@ -1438,9 +1438,11 @@ export default function RPGGame({
         disabled={gameOver || isPaused || effectivePhase !== "playing"}
         hidden={hasScreenOverlay || gameOver}
         healingItem={uiState?.inventory?.find((item) => item.id === "potion") || null}
+        utilityItems={uiState?.inventory?.filter((item) => item.id !== "potion") || []}
         onMove={movePlayer}
         onAttack={attack}
         onUseHeal={() => handleUseItem("potion")}
+        onUseItem={handleUseItem}
       />
     </div>
   );
