@@ -65,8 +65,40 @@ function isPlaceholderWebAppUrl(value) {
 
 function buildKeyboard(webAppUrl) {
   return Markup.inlineKeyboard([
-    [Markup.button.webApp("Play", webAppUrl)],
+    [Markup.button.webApp("Розпочати", webAppUrl)],
   ]);
+}
+
+function buildWelcomeMessage() {
+  return [
+    "Hero's Journey",
+    "",
+    "Відкрий гру і розпочинай забіг однією кнопкою.",
+    "Усередині чекають хвилі ворогів, боси та постійний прогрес.",
+  ].join("\n");
+}
+
+async function configureBotSurface(bot, webAppUrl) {
+  try {
+    await bot.telegram.setMyCommands([
+      { command: "start", description: "Відкрити стартове меню" },
+      { command: "play", description: "Розпочати гру" },
+    ]);
+  } catch (error) {
+    console.warn("Failed to set bot commands:", error instanceof Error ? error.message : error);
+  }
+
+  try {
+    await bot.telegram.setChatMenuButton({
+      menuButton: {
+        type: "web_app",
+        text: "Розпочати",
+        web_app: { url: webAppUrl },
+      },
+    });
+  } catch (error) {
+    console.warn("Failed to set chat menu button:", error instanceof Error ? error.message : error);
+  }
 }
 
 function createBot(token, webAppUrl) {
@@ -74,7 +106,7 @@ function createBot(token, webAppUrl) {
 
   const sendMenu = async (ctx) => {
     await ctx.reply(
-      "Hero's Journey is ready. Tap the button below to start playing:",
+      buildWelcomeMessage(),
       buildKeyboard(webAppUrl),
     );
   };
@@ -133,6 +165,7 @@ export async function startBot(options = {}) {
   console.log("WebApp URL:", webAppUrl);
 
   const bot = createBot(token, webAppUrl);
+  await configureBotSurface(bot, webAppUrl);
   const webhookDomain = resolveWebhookDomain();
   const shouldUseWebhook = mode === "webhook" || (mode === "auto" && Boolean(webhookDomain));
 

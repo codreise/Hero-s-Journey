@@ -27,6 +27,7 @@ const WALL_COLOR = "#3a2870";
 const WALL_TOP = "#5540a0";
 const GRID_COLOR = "#221550";
 const EMOJI_FONT_STACK = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
+const MOBILE_AUTO_ATTACK_DELAY_MS = 35;
 const emojiSpriteCache = new Map();
 const MOVE_DIRECTIONS = [
   { dx: 0, dy: -1 },
@@ -371,10 +372,45 @@ function drawProjectile(ctx, projectile) {
   ctx.restore();
 }
 
-function pickEnemyStep(enemy, state) {
+function buildMapLayer(map) {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const layer = document.createElement("canvas");
+  layer.width = COLS * GRID;
+  layer.height = ROWS * GRID;
+  const ctx = layer.getContext("2d");
+  if (!ctx) {
+    return null;
+  }
+
+  ctx.fillStyle = FLOOR_COLOR;
+  ctx.fillRect(0, 0, layer.width, layer.height);
+
+  for (let r = 0; r < ROWS; r += 1) {
+    for (let c = 0; c < COLS; c += 1) {
+      const x = c * GRID;
+      const y = r * GRID;
+      if (map[r][c] === TILE.WALL) {
+        ctx.fillStyle = WALL_COLOR;
+        ctx.fillRect(x, y, GRID, GRID);
+        ctx.fillStyle = WALL_TOP;
+        ctx.fillRect(x, y, GRID, 4);
+      } else {
+        ctx.strokeStyle = GRID_COLOR;
+        ctx.lineWidth = 0.4;
+        ctx.strokeRect(x, y, GRID, GRID);
+      }
+    }
+  }
+
+  return layer;
+}
+
+function getEnemyMoveCandidates(enemy, state) {
   const { map, player, enemies } = state;
-  const currentDistance = Math.abs(enemy.x - player.x) + Math.abs(enemy.y - player.y);
-  const candidates = MOVE_DIRECTIONS
+  return MOVE_DIRECTIONS
     .map((direction) => ({
       ...direction,
       nx: enemy.x + direction.dx,
@@ -389,33 +425,198 @@ function pickEnemyStep(enemy, state) {
       ...candidate,
       dist: Math.abs(candidate.nx - player.x) + Math.abs(candidate.ny - player.y),
     }));
+}
+
+function findPathStepToPlayer(enemy, state, candidates) {
+  const { map, player, enemies } = state;
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const occupiedTiles = new Set(
+    enemies
+      .filter((other) => other.id !== enemy.id)
+      .map((other) => `${other.x}:${other.y}`)
+  );
+
+  const goalTiles = new Set(
+    MOVE_DIRECTIONS
+      .map((direction) => ({
+        x: player.x + direction.dx,
+        y: player.y + direction.dy,
+      }))
+      .filter(({ x, y }) => !isWall(map, x, y) && !occupiedTiles.has(`${x}:${y}`))
+      .map(({ x, y }) => `${x}:${y}`)
+  );
+
+  if (goalTiles.size === 0) {
+    return null;
+  }
+
+  const startKey = `${enemy.x}:${enemy.y}`;
+  const queue = [{ x: enemy.x, y: enemy.y }];
+  const visited = new Set([startKey]);
+  const parents = new Map();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    const currentKey = `${current.x}:${current.y}`;
+
+    if (currentKey !== startKey && goalTiles.has(currentKey)) {
+      let walkKey = currentKey;
+      while (parents.get(walkKey) && parents.get(walkKey) !== startKey) {
+        walkKey = parents.get(walkKey);
+      }
+
+      const [targetX, targetY] = walkKey.split(":").map(Number);
+      return candidates.find((candidate) => candidate.nx === targetX && candidate.ny === targetY) || null;
+    }
+
+    const sortedDirections = [...MOVE_DIRECTIONS].sort((left, right) => {
+      const leftDistance = Math.abs(current.x + left.dx - player.x) + Math.abs(current.y + left.dy - player.y);
+      const rightDistance = Math.abs(current.x + right.dx - player.x) + Math.abs(current.y + right.dy - player.y);
+      return leftDistance - rightDistance;
+    });
+
+    sortedDirections.forEach((direction) => {
+      const nextX = current.x + direction.dx;
+      const nextY = current.y + direction.dy;
+      const nextKey = `${nextX}:${nextY}`;
+
+      if (visited.has(nextKey) || isWall(map, nextX, nextY) || occupiedTiles.has(nextKey) || (nextX === player.x && nextY === player.y)) {
+        return;
+      }
+
+      visited.add(nextKey);
+      parents.set(nextKey, currentKey);
+      queue.push({ x: nextX, y: nextY });
+    });
+  }
+
+  return null;
+}
+
+function pickScoredCandidate(candidates, getScore) {
+  return [...candidates].sort((left, right) => getScore(right) - getScore(left))[0] || null;
+}
+
+function countNearbyAllies(enemy, state, x, y, radius = 2) {
+  return state.enemies.filter((other) => (
+    other.id !== enemy.id
+    && !other.isBoss
+    && other.archetypeId === enemy.archetypeId
+    && Math.abs(other.x - x) + Math.abs(other.y - y) <= radius
+  )).length;
+}
+
+function pickPackStep(enemy, state, candidates, pathStep, nearest, randomStep, currentDistance) {
+  const localAllies = countNearbyAllies(enemy, state, enemy.x, enemy.y, 3);
+  if (currentDistance > enemy.aggroRange + 2 && localAllies === 0) {
+    return Math.random() < 0.45 ? randomStep : nearest;
+  }
+
+  return pickScoredCandidate(candidates, (candidate) => {
+    const support = countNearbyAllies(enemy, state, candidate.nx, candidate.ny, 3);
+    const closesGap = currentDistance - candidate.dist;
+    const attackPressure = candidate.dist === 1 ? 5 : 0;
+    const pathBonus = pathStep && candidate.nx === pathStep.nx && candidate.ny === pathStep.ny ? 3 : 0;
+
+    return support * 7 + closesGap * 6 - candidate.dist * 2 + attackPressure + pathBonus;
+  }) || pathStep || nearest;
+}
+
+function pickFlankerStep(enemy, state, candidates, pathStep, nearest, randomStep, currentDistance) {
+  const { player } = state;
+  if (currentDistance <= 2) {
+    return nearest;
+  }
+
+  if (currentDistance > enemy.aggroRange + 1 && Math.random() < 0.35) {
+    return randomStep;
+  }
+
+  return pickScoredCandidate(candidates, (candidate) => {
+    const xGap = Math.abs(candidate.nx - player.x);
+    const yGap = Math.abs(candidate.ny - player.y);
+    const sideAngle = candidate.nx !== player.x && candidate.ny !== player.y ? 7 : 0;
+    const balancedAngle = -Math.abs(xGap - yGap) * 3;
+    const closesGap = Math.max(-1, currentDistance - candidate.dist) * 4;
+    const strikeSetup = candidate.dist <= 2 ? 5 : 0;
+    const directPathPenalty = pathStep && candidate.nx === pathStep.nx && candidate.ny === pathStep.ny ? -2 : 0;
+
+    return sideAngle + balancedAngle + closesGap + strikeSetup + directPathPenalty - candidate.dist;
+  }) || pathStep || nearest;
+}
+
+function pickTacticianStep(enemy, candidates, pathStep, nearest, farthest, randomStep, currentDistance) {
+  const preferredMin = 3;
+  const preferredMax = 4;
+
+  if (currentDistance <= 2) {
+    return Math.random() < 0.85 ? farthest : nearest;
+  }
+
+  if (currentDistance > preferredMax) {
+    return currentDistance <= enemy.aggroRange + 2 ? (pathStep || nearest) : randomStep;
+  }
+
+  if (Math.random() < 0.22) {
+    return nearest;
+  }
+
+  return pickScoredCandidate(candidates, (candidate) => {
+    const preferredDistance = candidate.dist >= preferredMin && candidate.dist <= preferredMax ? 8 : 0;
+    const distancePenalty = Math.abs(candidate.dist - preferredMax) * 4;
+    const avoidMelee = candidate.dist === 1 ? -8 : 0;
+
+    return preferredDistance - distancePenalty + avoidMelee;
+  }) || randomStep;
+}
+
+function pickEnemyStep(enemy, state) {
+  const { player } = state;
+  const currentDistance = Math.abs(enemy.x - player.x) + Math.abs(enemy.y - player.y);
+  const candidates = getEnemyMoveCandidates(enemy, state);
 
   if (candidates.length === 0) {
     return null;
   }
 
+  const pathStep = findPathStepToPlayer(enemy, state, candidates);
   const nearest = [...candidates].sort((a, b) => a.dist - b.dist)[0];
   const farthest = [...candidates].sort((a, b) => b.dist - a.dist)[0];
   const randomStep = candidates[Math.floor(Math.random() * candidates.length)];
 
   switch (enemy.behavior) {
+    case "pack":
+      return pickPackStep(enemy, state, candidates, pathStep, nearest, randomStep, currentDistance);
+    case "flanker":
+      return pickFlankerStep(enemy, state, candidates, pathStep, nearest, randomStep, currentDistance);
+    case "tactician":
+      return pickTacticianStep(enemy, candidates, pathStep, nearest, farthest, randomStep, currentDistance);
     case "hunter":
-      return nearest;
+      return pathStep || nearest;
     case "skirmisher":
       if (currentDistance <= 2) {
         return farthest;
       }
-      return currentDistance <= enemy.aggroRange ? nearest : randomStep;
+      return currentDistance <= enemy.aggroRange + 1 ? (pathStep || nearest) : randomStep;
     case "brute":
-      if (currentDistance > enemy.aggroRange && Math.random() < 0.45) {
+      if (currentDistance > enemy.aggroRange + 2 && Math.random() < 0.25) {
         return null;
       }
-      return nearest;
+      return pathStep || nearest;
     case "erratic":
-      return Math.random() < 0.55 ? randomStep : nearest;
+      if (currentDistance <= enemy.aggroRange) {
+        return Math.random() < 0.25 ? randomStep : (pathStep || nearest);
+      }
+      return randomStep;
     case "wander":
     default:
-      return currentDistance <= enemy.aggroRange ? nearest : randomStep;
+      if (currentDistance <= enemy.aggroRange + 1) {
+        return pathStep || nearest;
+      }
+      return Math.random() < 0.35 ? nearest : randomStep;
   }
 }
 
@@ -442,8 +643,10 @@ export default function RPGGame({
   const projectilesRef = useRef([]);
   const countdownValueRef = useRef(0);
   const renderPositionsRef = useRef({ player: { x: 2, y: 2 }, enemies: new Map() });
+  const mapLayerRef = useRef(null);
   const screenShakeRef = useRef({ intensity: 0, expiresAt: 0 });
   const attackCooldownUntilRef = useRef(0);
+  const mobileAutoAttackTimeoutRef = useRef(null);
   const damageCooldownUntilRef = useRef(0);
   const playerFlashUntilRef = useRef(0);
   const attackPulseRef = useRef(null);
@@ -474,6 +677,8 @@ export default function RPGGame({
       return;
     }
 
+    const bossEnemy = currentState.enemies.find((enemy) => enemy.isBoss) || null;
+
     setUiState({
       hp: currentState.player.hp,
       maxHp: currentState.player.maxHp,
@@ -484,10 +689,10 @@ export default function RPGGame({
       inventory: [...currentState.player.inventory],
       wave: currentState.wave,
       enemiesLeft: currentState.enemies.length,
-      bossName: currentState.bossPreview?.name || currentState.enemies.find((enemy) => enemy.isBoss)?.name || "",
+      bossName: currentState.bossPreview?.name || bossEnemy?.name || "",
       bossSubtitle: currentState.bossPreview?.subtitle || "",
-      bossHp: currentState.enemies.find((enemy) => enemy.isBoss)?.hp || 0,
-      bossMaxHp: currentState.enemies.find((enemy) => enemy.isBoss)?.maxHp || 0,
+      bossHp: bossEnemy?.hp || 0,
+      bossMaxHp: bossEnemy?.maxHp || 0,
       stats: { ...currentState.stats },
       essenceReward: getRunEssenceReward(currentState),
       xpNeeded: xpToNextLevel(currentState.player.level),
@@ -541,6 +746,10 @@ export default function RPGGame({
     setRewardSelectedId(nextState.rewardOptions[0]?.id || "");
     countdownValueRef.current = 0;
     attackCooldownUntilRef.current = 0;
+    if (mobileAutoAttackTimeoutRef.current) {
+      window.clearTimeout(mobileAutoAttackTimeoutRef.current);
+      mobileAutoAttackTimeoutRef.current = null;
+    }
     damageCooldownUntilRef.current = 0;
     playerFlashUntilRef.current = 0;
     attackPulseRef.current = null;
@@ -549,6 +758,7 @@ export default function RPGGame({
       player: { x: nextState.player.x, y: nextState.player.y },
       enemies: new Map(nextState.enemies.map((enemy) => [enemy.id, { x: enemy.x, y: enemy.y }])),
     };
+    mapLayerRef.current = buildMapLayer(nextState.map);
     setCountdownValue(0);
     projectilesRef.current = [];
     syncUI(nextState);
@@ -575,6 +785,10 @@ export default function RPGGame({
   useEffect(() => () => {
     countdownValueRef.current = 0;
     attackPulseRef.current = null;
+    if (mobileAutoAttackTimeoutRef.current) {
+      window.clearTimeout(mobileAutoAttackTimeoutRef.current);
+      mobileAutoAttackTimeoutRef.current = null;
+    }
     clearCountdown();
   }, [clearCountdown]);
 
@@ -742,20 +956,21 @@ export default function RPGGame({
   const attack = useCallback(() => {
     const currentState = stateRef.current;
     if (!currentState || gameOver || isPaused || isCountdownActive || currentState.phase !== "playing") {
-      return;
+      return false;
     }
 
     const now = performance.now();
     if (now < attackCooldownUntilRef.current) {
-      return;
+      return false;
     }
-    attackCooldownUntilRef.current = now + 220;
 
     const { player, enemies } = currentState;
     const adjacent = enemies.filter((enemy) => Math.abs(enemy.x - player.x) + Math.abs(enemy.y - player.y) <= 1);
     if (adjacent.length === 0) {
-      return;
+      return false;
     }
+
+    attackCooldownUntilRef.current = now + 220;
 
     const target = adjacent.sort((left, right) => {
       if (left.isBoss !== right.isBoss) {
@@ -819,7 +1034,21 @@ export default function RPGGame({
 
     persistState();
     syncUI();
+    return true;
   }, [gameOver, hapticImpact, hapticNotification, isCountdownActive, isPaused, isTelegram, persistState, syncUI, triggerScreenShake]);
+
+  const movePlayerWithAutoAttack = useCallback((direction) => {
+    movePlayer(direction);
+
+    if (mobileAutoAttackTimeoutRef.current) {
+      window.clearTimeout(mobileAutoAttackTimeoutRef.current);
+    }
+
+    mobileAutoAttackTimeoutRef.current = window.setTimeout(() => {
+      attack();
+      mobileAutoAttackTimeoutRef.current = null;
+    }, MOBILE_AUTO_ATTACK_DELAY_MS);
+  }, [attack, movePlayer]);
 
   const handleUseItem = useCallback((itemId) => {
     const currentState = stateRef.current;
@@ -1089,8 +1318,12 @@ export default function RPGGame({
         ctx.translate(shakeX, shakeY);
       }
 
-      ctx.fillStyle = FLOOR_COLOR;
-      ctx.fillRect(0, 0, canvasSize.w, canvasSize.h);
+      if (mapLayerRef.current) {
+        ctx.drawImage(mapLayerRef.current, 0, 0, canvasSize.w, canvasSize.h);
+      } else {
+        ctx.fillStyle = FLOOR_COLOR;
+        ctx.fillRect(0, 0, canvasSize.w, canvasSize.h);
+      }
 
       const renderPositions = renderPositionsRef.current;
       renderPositions.player.x = interpolatePosition(renderPositions.player.x, currentState.player.x, 0.28);
@@ -1111,23 +1344,6 @@ export default function RPGGame({
           renderPositions.enemies.delete(enemyId);
         }
       });
-
-      for (let r = 0; r < ROWS; r += 1) {
-        for (let c = 0; c < COLS; c += 1) {
-          const x = c * GRID;
-          const y = r * GRID;
-          if (currentState.map[r][c] === TILE.WALL) {
-            ctx.fillStyle = WALL_COLOR;
-            ctx.fillRect(x, y, GRID, GRID);
-            ctx.fillStyle = WALL_TOP;
-            ctx.fillRect(x, y, GRID, 4);
-          } else {
-            ctx.strokeStyle = GRID_COLOR;
-            ctx.lineWidth = 0.4;
-            ctx.strokeRect(x, y, GRID, GRID);
-          }
-        }
-      }
 
       currentState.enemies.forEach((enemy) => {
         if (enemy.isBoss && enemy.projectileCharge) {
@@ -1442,7 +1658,7 @@ export default function RPGGame({
         hidden={hasScreenOverlay || gameOver}
         healingItem={uiState?.inventory?.find((item) => item.id === "potion") || null}
         utilityItems={uiState?.inventory?.filter((item) => item.id !== "potion") || []}
-        onMove={movePlayer}
+        onMove={movePlayerWithAutoAttack}
         onAttack={attack}
         onUseHeal={() => handleUseItem("potion")}
         onUseItem={handleUseItem}

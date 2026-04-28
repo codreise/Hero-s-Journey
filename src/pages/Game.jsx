@@ -7,6 +7,7 @@ import { useTelegramMiniApp } from "../lib/telegram-mini-app";
 
 const SAVE_KEY = "heros-journey-save";
 const SAVE_BUNDLE_VERSION = 2;
+const SAVE_DEBOUNCE_MS = 350;
 
 function normalizeSaveBundle(rawValue) {
   if (!rawValue || typeof rawValue !== "object") {
@@ -52,10 +53,12 @@ export default function Game() {
   const [saveBundle, setSaveBundle] = useState(() => loadSavedGame());
   const [isSaveLoading, setIsSaveLoading] = useState(false);
   const [saveError, setSaveError] = useState("");
-  const [screen, setScreen] = useState("start"); // "start" | "game"
+  const [screen, setScreen] = useState("start");
   const [gameKey, setGameKey] = useState(0);
   const [initialGameState, setInitialGameState] = useState(null);
   const saveBundleRef = useRef(saveBundle);
+  const pendingSaveTimeoutRef = useRef(null);
+  const pendingBundleRef = useRef(null);
 
   useEffect(() => {
     saveBundleRef.current = saveBundle;
@@ -71,6 +74,58 @@ export default function Game() {
 
   const useServerSave = Boolean(isTelegram && telegramUserId);
   const isTelegramGameScreen = isTelegram && screen === "game";
+
+  const flushPendingSave = useCallback(() => {
+    if (pendingSaveTimeoutRef.current) {
+      window.clearTimeout(pendingSaveTimeoutRef.current);
+      pendingSaveTimeoutRef.current = null;
+    }
+
+    const bundleToPersist = pendingBundleRef.current;
+    if (!bundleToPersist) {
+      return;
+    }
+
+    pendingBundleRef.current = null;
+
+    if (useServerSave) {
+      setSaveError("");
+      void saveServerGame(telegramUserId, bundleToPersist, user ? {
+        id: user.id,
+        username: user.username,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        initData,
+      } : null).catch(() => {
+        setSaveError("Не вдалося оновити серверне збереження. Локальна копія лишилася доступною.");
+        try {
+          window.localStorage.setItem(SAVE_KEY, JSON.stringify(bundleToPersist));
+        } catch {}
+      });
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(SAVE_KEY, JSON.stringify(bundleToPersist));
+    } catch {
+      // Ignore localStorage failures and keep the game playable.
+    }
+  }, [initData, telegramUserId, useServerSave, user]);
+
+  useEffect(() => () => {
+    flushPendingSave();
+  }, [flushPendingSave]);
+
+  useEffect(() => {
+    const handlePageHide = () => {
+      flushPendingSave();
+    };
+
+    window.addEventListener("pagehide", handlePageHide);
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide);
+    };
+  }, [flushPendingSave]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -110,37 +165,39 @@ export default function Game() {
     };
   }, [telegramUserId, useServerSave]);
 
-  const persistBundle = useCallback((nextBundle) => {
-    saveBundleRef.current = nextBundle;
-    setSaveBundle(nextBundle);
+  const persistBundle = useCallback((nextBundle, options = {}) => {
+    const {
+      immediate = false,
+      syncState = true,
+    } = options;
 
-    if (useServerSave) {
-      setSaveError("");
-      void saveServerGame(telegramUserId, nextBundle, user ? {
-        id: user.id,
-        username: user.username,
-        first_name: user.first_name,
-        last_name: user.last_name,
-        initData,
-      } : null).catch(() => {
-        setSaveError("Не вдалося оновити серверне збереження. Локальна копія залишилась доступною.");
-        window.localStorage.setItem(SAVE_KEY, JSON.stringify(nextBundle));
-      });
+    saveBundleRef.current = nextBundle;
+    pendingBundleRef.current = nextBundle;
+
+    if (syncState) {
+      setSaveBundle(nextBundle);
+    }
+
+    if (immediate) {
+      flushPendingSave();
       return;
     }
 
-    try {
-      window.localStorage.setItem(SAVE_KEY, JSON.stringify(nextBundle));
-    } catch {
-      // Ignore localStorage failures and keep the game playable.
+    if (pendingSaveTimeoutRef.current) {
+      window.clearTimeout(pendingSaveTimeoutRef.current);
     }
-  }, [initData, telegramUserId, useServerSave, user]);
+
+    pendingSaveTimeoutRef.current = window.setTimeout(() => {
+      pendingSaveTimeoutRef.current = null;
+      flushPendingSave();
+    }, SAVE_DEBOUNCE_MS);
+  }, [flushPendingSave]);
 
   const saveGame = useCallback((snapshot) => {
     persistBundle({
       ...saveBundleRef.current,
       runState: snapshot,
-    });
+    }, { syncState: false });
   }, [persistBundle]);
 
   const clearSave = useCallback(() => {
@@ -149,7 +206,7 @@ export default function Game() {
     persistBundle({
       ...saveBundleRef.current,
       runState: null,
-    });
+    }, { immediate: true });
   }, [persistBundle]);
 
   const handleRunComplete = useCallback((finalSnapshot) => {
@@ -158,13 +215,13 @@ export default function Game() {
       ...currentBundle,
       runState: null,
       profile: applyRunResultsToProfile(currentBundle.profile, finalSnapshot),
-    });
+    }, { immediate: true });
   }, [persistBundle]);
 
   const handleStart = useCallback(() => {
     clearSave();
     setInitialGameState(null);
-    setGameKey((k) => k + 1);
+    setGameKey((currentKey) => currentKey + 1);
     setScreen("game");
   }, [clearSave]);
 
@@ -173,18 +230,19 @@ export default function Game() {
       return;
     }
     setInitialGameState(savedGame);
-    setGameKey((k) => k + 1);
+    setGameKey((currentKey) => currentKey + 1);
     setScreen("game");
   }, [savedGame]);
 
   const handleRestart = useCallback(() => {
     clearSave();
     setInitialGameState(null);
-    setGameKey((k) => k + 1);
+    setGameKey((currentKey) => currentKey + 1);
     setScreen("game");
   }, [clearSave]);
 
   const handleHome = useCallback(() => {
+    setSaveBundle(saveBundleRef.current);
     setScreen("start");
   }, []);
 

@@ -5,17 +5,28 @@ import PotionIcon from "./PotionIcon";
 const REPEAT_DELAY = 260;
 const REPEAT_INTERVAL = 95;
 
-const Btn = ({ children, className = "", disabled, onPressEnd, onPressStart }) => (
+const Btn = ({ ariaLabel, children, className = "", disabled, onPressEnd, onPressStart }) => (
   <button
+    aria-label={ariaLabel}
     disabled={disabled}
     className={`flex items-center justify-center rounded-2xl border border-border/80 bg-card/80 shadow-lg shadow-black/15 transition-all touch-none select-none active:bg-primary/25 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed ${className}`}
+    onContextMenu={(e) => e.preventDefault()}
+    onLostPointerCapture={onPressEnd}
     onPointerCancel={onPressEnd}
     onPointerDown={(e) => {
       e.preventDefault();
+      e.currentTarget.setPointerCapture?.(e.pointerId);
       onPressStart();
     }}
-    onPointerLeave={onPressEnd}
-    onPointerUp={onPressEnd}
+    onPointerLeave={(e) => {
+      if (e.pointerType === "mouse") {
+        onPressEnd();
+      }
+    }}
+    onPointerUp={(e) => {
+      e.currentTarget.releasePointerCapture?.(e.pointerId);
+      onPressEnd();
+    }}
   >
     {children}
   </button>
@@ -80,10 +91,10 @@ export default function MobileRPGControls({
   }
 
   return (
-    <div className="md:hidden mt-0.5 w-full shrink-0 pb-[calc(env(safe-area-inset-bottom,0px)+4px)]">
-      <div className="mx-auto grid w-full max-w-[560px] grid-cols-[1fr_minmax(148px,248px)] gap-x-4 gap-y-1 rounded-[26px] border border-border/60 bg-card/76 px-4 py-2 shadow-2xl shadow-black/25 backdrop-blur sm:px-5 sm:py-3">
+    <div className="md:hidden mt-0.5 w-full shrink-0 pb-[calc(env(safe-area-inset-bottom,0px)+6px)]">
+      <div className="mx-auto grid w-full max-w-[640px] grid-cols-[minmax(188px,1fr)_minmax(96px,132px)] gap-x-3 gap-y-2 rounded-[26px] border border-border/60 bg-card/76 px-3 py-2.5 shadow-2xl shadow-black/25 backdrop-blur sm:grid-cols-[minmax(204px,1fr)_minmax(110px,148px)] sm:gap-x-4 sm:px-5 sm:py-3">
         <div className="col-start-2 row-start-1 flex justify-end">
-          <Btn disabled={disabled} onPressEnd={clearTimers} onPressStart={triggerAttack} className="h-[84px] w-[84px] border-destructive/50 bg-destructive/15 sm:h-[92px] sm:w-[92px]">
+          <Btn ariaLabel="Attack" disabled={disabled} onPressEnd={clearTimers} onPressStart={triggerAttack} className="h-24 w-24 border-destructive/50 bg-destructive/15 sm:h-[104px] sm:w-[104px]">
             <div className="flex flex-col items-center gap-1.5">
               <Sword className="h-7 w-7 text-destructive sm:h-8 sm:w-8" />
               <span className="font-pixel text-[10px] text-destructive sm:text-[11px]">УДАР</span>
@@ -91,24 +102,24 @@ export default function MobileRPGControls({
           </Btn>
         </div>
 
-        <div className="col-start-1 row-span-2 row-start-1 flex items-start justify-start pt-1">
-          <div className="grid h-[156px] w-[156px] shrink-0 grid-cols-3 grid-rows-3 gap-1 rounded-[40px] border border-border/70 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.1),rgba(255,255,255,0)_60%),linear-gradient(180deg,rgba(30,26,50,0.94),rgba(18,15,35,0.96))] p-3 shadow-inner shadow-black/25 sm:h-[168px] sm:w-[168px] sm:gap-1.5">
+        <div className="col-start-1 row-span-2 row-start-1 flex items-start justify-start">
+          <div className="grid h-[188px] w-[188px] shrink-0 grid-cols-3 grid-rows-3 gap-2 rounded-[42px] border border-border/70 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.1),rgba(255,255,255,0)_60%),linear-gradient(180deg,rgba(30,26,50,0.94),rgba(18,15,35,0.96))] p-2.5 shadow-inner shadow-black/25 sm:h-[204px] sm:w-[204px] sm:gap-2.5 sm:p-3">
             <div />
-            <Btn disabled={disabled} onPressEnd={clearTimers} onPressStart={() => startMove("up")} className="h-full w-full rounded-2xl border-primary/20 bg-primary/10">
+            <Btn ariaLabel="Move up" disabled={disabled} onPressEnd={clearTimers} onPressStart={() => startMove("up")} className="h-full w-full rounded-2xl border-primary/20 bg-primary/10">
               <ArrowUp className="h-6 w-6 text-foreground sm:h-7 sm:w-7" />
             </Btn>
             <div />
-            <Btn disabled={disabled} onPressEnd={clearTimers} onPressStart={() => startMove("left")} className="h-full w-full rounded-2xl border-primary/20 bg-primary/10">
+            <Btn ariaLabel="Move left" disabled={disabled} onPressEnd={clearTimers} onPressStart={() => startMove("left")} className="h-full w-full rounded-2xl border-primary/20 bg-primary/10">
               <ArrowLeft className="h-6 w-6 text-foreground sm:h-7 sm:w-7" />
             </Btn>
             <div className="flex items-center justify-center rounded-2xl border border-primary/10 bg-primary/5">
               <div className="h-5 w-5 rounded-full bg-primary/30 sm:h-6 sm:w-6" />
             </div>
-            <Btn disabled={disabled} onPressEnd={clearTimers} onPressStart={() => startMove("right")} className="h-full w-full rounded-2xl border-primary/20 bg-primary/10">
+            <Btn ariaLabel="Move right" disabled={disabled} onPressEnd={clearTimers} onPressStart={() => startMove("right")} className="h-full w-full rounded-2xl border-primary/20 bg-primary/10">
               <ArrowRight className="h-6 w-6 text-foreground sm:h-7 sm:w-7" />
             </Btn>
             <div />
-            <Btn disabled={disabled} onPressEnd={clearTimers} onPressStart={() => startMove("down")} className="h-full w-full rounded-2xl border-primary/20 bg-primary/10">
+            <Btn ariaLabel="Move down" disabled={disabled} onPressEnd={clearTimers} onPressStart={() => startMove("down")} className="h-full w-full rounded-2xl border-primary/20 bg-primary/10">
               <ArrowDown className="h-6 w-6 text-foreground sm:h-7 sm:w-7" />
             </Btn>
             <div />
@@ -118,10 +129,11 @@ export default function MobileRPGControls({
         <div className="col-start-2 row-start-2 flex min-w-0 flex-col items-end gap-1.5">
           {healingItem && (
             <Btn
+              ariaLabel="Use healing potion"
               disabled={disabled || healingItem.count <= 0}
               onPressEnd={clearTimers}
               onPressStart={triggerHeal}
-              className="h-[84px] w-[84px] border-accent/50 bg-accent/15 sm:h-[92px] sm:w-[92px]"
+              className="h-[88px] w-[88px] border-accent/50 bg-accent/15 sm:h-24 sm:w-24"
             >
               <div className="flex flex-col items-center gap-1">
                 <PotionIcon className="h-6 w-6 sm:h-7 sm:w-7" />
