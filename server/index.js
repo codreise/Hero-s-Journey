@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { startBot } from "../bot/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,6 +12,53 @@ const DATA_DIR = process.env.SAVE_DATA_DIR
   ? path.resolve(process.cwd(), process.env.SAVE_DATA_DIR)
   : path.join(__dirname, "data");
 const SAVE_FILE = path.join(DATA_DIR, "saves.json");
+
+// Optional: serve built frontend from ../dist when present. API routes are unaffected.
+const DIST_DIR = path.join(__dirname, "..", "dist");
+
+function contentTypeFromExt(ext) {
+  switch (ext) {
+    case ".html":
+      return "text/html; charset=utf-8";
+    case ".js":
+      return "text/javascript; charset=utf-8";
+    case ".css":
+      return "text/css; charset=utf-8";
+    case ".json":
+      return "application/json; charset=utf-8";
+    case ".png":
+      return "image/png";
+    case ".jpg":
+    case ".jpeg":
+      return "image/jpeg";
+    case ".svg":
+      return "image/svg+xml";
+    case ".ico":
+      return "image/x-icon";
+    case ".wasm":
+      return "application/wasm";
+    default:
+      return "application/octet-stream";
+  }
+}
+
+async function tryServeStatic(request, response) {
+  if (request.method !== "GET") return false;
+  const requestUrl = new URL(request.url || "/", `http://${request.headers.host}`);
+  if (requestUrl.pathname.startsWith("/game-api/") || requestUrl.pathname.startsWith("/api/")) return false;
+  let requestedPath = requestUrl.pathname === "/" ? "/index.html" : requestUrl.pathname;
+  const safePath = path.normalize(path.join(DIST_DIR, requestedPath));
+  if (!safePath.startsWith(DIST_DIR)) return false;
+  try {
+    const data = await readFile(safePath);
+    const ext = path.extname(safePath).toLowerCase();
+    response.writeHead(200, { "Content-Type": contentTypeFromExt(ext) });
+    response.end(data);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function parseAllowedOrigins() {
   return String(process.env.CORS_ALLOWED_ORIGINS || "")
@@ -125,6 +173,12 @@ const server = createServer(async (request, response) => {
     return;
   }
 
+  // Try to serve frontend static files from ../dist (if present)
+  if (request.method === "GET") {
+    const served = await tryServeStatic(request, response);
+    if (served) return;
+  }
+
   if (requestUrl.pathname === "/game-api/health" && request.method === "GET") {
     sendJson(response, 200, { ok: true });
     return;
@@ -182,4 +236,8 @@ const server = createServer(async (request, response) => {
 
 server.listen(PORT, () => {
   console.log(`Save server listening on http://localhost:${PORT}`);
+});
+
+startBot().catch((error) => {
+  console.error("Telegram bot failed to start:", error instanceof Error ? error.message : error);
 });

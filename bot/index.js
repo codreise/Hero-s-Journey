@@ -1,11 +1,13 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Telegraf, Markup } from "telegraf";
+import { Markup, Telegraf } from "telegraf";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "..");
+
+let runningBot = null;
 
 function loadDotEnv() {
   const envPath = path.join(projectRoot, ".env");
@@ -14,88 +16,123 @@ function loadDotEnv() {
     const rawEnv = readFileSync(envPath, "utf8");
     rawEnv.split(/\r?\n/).forEach((line) => {
       const trimmedLine = line.trim();
-      if (!trimmedLine || trimmedLine.startsWith("#")) {
-        return;
-      }
+      if (!trimmedLine || trimmedLine.startsWith("#")) return;
 
-      const separatorIndex = trimmedLine.indexOf("=");
-      if (separatorIndex === -1) {
-        return;
-      }
+      const idx = trimmedLine.indexOf("=");
+      if (idx === -1) return;
 
-      const key = trimmedLine.slice(0, separatorIndex).trim();
-      const value = trimmedLine.slice(separatorIndex + 1).trim().replace(/^['\"]|['\"]$/g, "");
+      const key = trimmedLine.slice(0, idx).trim();
+      const value = trimmedLine.slice(idx + 1).trim().replace(/^['"]|['"]$/g, "");
+
       if (key && !process.env[key]) {
         process.env[key] = value;
       }
     });
   } catch {
-    // .env is optional; process.env may already contain all values.
+    console.warn(".env not found, using system env only");
   }
 }
 
 async function resolveWebAppUrl() {
-  if (process.env.WEB_APP_URL) {
-    return process.env.WEB_APP_URL;
+  const configuredUrl = process.env.WEB_APP_URL?.trim();
+  if (configuredUrl) {
+    return configuredUrl;
   }
 
   try {
-    const response = await fetch("http://127.0.0.1:4040/api/tunnels");
-    if (!response.ok) {
-      return "";
+    const res = await fetch("http://127.0.0.1:4040/api/tunnels");
+    if (res.ok) {
+      const data = await res.json();
+      const url = data?.tunnels?.find((tunnel) => tunnel.public_url?.startsWith("https://"))?.public_url;
+      if (url) return url;
     }
+  } catch {}
 
-    const payload = await response.json();
-    const httpsTunnel = payload?.tunnels?.find((tunnel) => tunnel.public_url?.startsWith("https://"));
-    return httpsTunnel?.public_url || "";
-  } catch {
-    return "";
-  }
+  return "";
 }
 
-function buildInlineKeyboard(webAppUrl) {
+function isPlaceholderWebAppUrl(value) {
+  if (!value) {
+    return true;
+  }
+
+  return [
+    "https://example.com",
+    "https://your-frontend.example.com",
+    "https://your-mini-app.example.com",
+  ].includes(value);
+}
+
+function buildKeyboard(webAppUrl) {
   return Markup.inlineKeyboard([
-    [Markup.button.webApp("Грати", webAppUrl)],
+    [Markup.button.webApp("Play", webAppUrl)],
   ]);
 }
 
-async function main() {
+export async function startBot(options = {}) {
+  const { strict = false } = options;
+
+  if (runningBot) {
+    return runningBot;
+  }
+
   loadDotEnv();
 
-  const token = process.env.BOT_TOKEN;
+  const token = process.env.BOT_TOKEN?.trim();
   if (!token) {
-    console.error("BOT_TOKEN is required to run the Telegram bot.");
-    process.exit(1);
+    if (strict) {
+      throw new Error("BOT_TOKEN missing");
+    }
+
+    console.warn("BOT_TOKEN missing, Telegram bot startup skipped.");
+    return null;
   }
 
   const webAppUrl = await resolveWebAppUrl();
-  if (!webAppUrl) {
-    console.error("WEB_APP_URL is missing and ngrok URL was not detected. Set WEB_APP_URL in .env or run ngrok.");
-    process.exit(1);
+  if (isPlaceholderWebAppUrl(webAppUrl)) {
+    if (strict) {
+      throw new Error("WEB_APP_URL is missing or still points to a placeholder value.");
+    }
+
+    console.warn("WEB_APP_URL missing or placeholder, Telegram bot startup skipped.");
+    return null;
   }
+
+  console.log("WebApp URL:", webAppUrl);
 
   const bot = new Telegraf(token);
 
-  async function sendWelcomeMessage(ctx) {
+  const sendMenu = async (ctx) => {
     await ctx.reply(
-      "Hero’s Journey готова. Натисни кнопку нижче, щоб відкрити гру.",
-      buildInlineKeyboard(webAppUrl)
+      "Hero's Journey is ready. Tap the button below to start playing:",
+      buildKeyboard(webAppUrl),
     );
-  }
+  };
 
   bot.start(async (ctx) => {
-    await sendWelcomeMessage(ctx);
+    await sendMenu(ctx);
   });
 
   bot.command("play", async (ctx) => {
-    await sendWelcomeMessage(ctx);
+    await sendMenu(ctx);
   });
 
   await bot.launch();
-  console.log(`Telegram bot is running with Mini App URL: ${webAppUrl}`);
+  runningBot = bot;
+
+  console.log("Bot is running");
 
   process.once("SIGINT", () => bot.stop("SIGINT"));
   process.once("SIGTERM", () => bot.stop("SIGTERM"));
+
+  return bot;
 }
 
-void main();
+const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : "";
+
+if (invokedPath === __filename) {
+  startBot({ strict: true }).catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  });
+}
