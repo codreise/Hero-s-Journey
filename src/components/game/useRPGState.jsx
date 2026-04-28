@@ -537,13 +537,18 @@ export function isBossWave(wave) {
   return wave > 0 && wave % 5 === 0;
 }
 
-export function createBossEnemy(id, player, wave) {
+export function createBossEnemy(id, player, wave, map) {
   const boss = getBossArchetype(wave);
+
+  const cols = map[0].length;
+  const rows = map.length;
+
   const scale = 1 + (wave - boss.minWave) * 0.09;
+
   const nextBoss = {
     id,
-    x: COLS - 4,
-    y: ROWS - 4,
+    x: cols - 4,
+    y: rows - 4,
     archetypeId: "boss",
     behavior: boss.behavior,
     aggroRange: boss.aggroRange,
@@ -567,8 +572,9 @@ export function createBossEnemy(id, player, wave) {
     bossId: boss.id,
   };
 
+  // щоб не спавнився біля гравця
   if (Math.abs(nextBoss.x - player.x) + Math.abs(nextBoss.y - player.y) <= 4) {
-    nextBoss.x = COLS - 5;
+    nextBoss.x = cols - 5;
     nextBoss.y = 2;
   }
 
