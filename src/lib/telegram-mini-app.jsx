@@ -118,10 +118,14 @@ export function TelegramMiniAppProvider({ children }) {
 
     webApp.ready();
     webApp.expand?.();
+    webApp.setHeaderColor?.("#171d1c");
+    webApp.setBackgroundColor?.("#171d1c");
     if (isTelegramVersionAtLeast(webApp, "7.7")) {
       webApp.disableVerticalSwipes?.();
     }
     applyState();
+    window.setTimeout(applyState, 80);
+    window.setTimeout(applyState, 300);
 
     const handleThemeChanged = () => applyState();
     const handleViewportChanged = () => applyState();

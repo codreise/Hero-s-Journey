@@ -19,9 +19,7 @@ const Btn = ({ ariaLabel, children, className = "", disabled, onPressEnd, onPres
       onPressStart();
     }}
     onPointerLeave={(e) => {
-      if (e.pointerType === "mouse") {
-        onPressEnd();
-      }
+      if (e.pointerType === "mouse") onPressEnd();
     }}
     onPointerUp={(e) => {
       e.currentTarget.releasePointerCapture?.(e.pointerId);
@@ -46,124 +44,206 @@ export default function MobileRPGControls({
   const repeatIntervalRef = useRef(null);
 
   const clearTimers = () => {
-    if (repeatTimeoutRef.current) {
-      window.clearTimeout(repeatTimeoutRef.current);
-      repeatTimeoutRef.current = null;
-    }
-
-    if (repeatIntervalRef.current) {
-      window.clearInterval(repeatIntervalRef.current);
-      repeatIntervalRef.current = null;
-    }
+    if (repeatTimeoutRef.current) clearTimeout(repeatTimeoutRef.current);
+    if (repeatIntervalRef.current) clearInterval(repeatIntervalRef.current);
   };
 
   useEffect(() => () => clearTimers(), []);
 
-  const startMove = (direction) => {
-    if (disabled) {
-      clearTimers();
-      return;
-    }
+  const startMove = (dir) => {
+    if (disabled) return;
 
     clearTimers();
-    onMove(direction);
-    repeatTimeoutRef.current = window.setTimeout(() => {
-      repeatIntervalRef.current = window.setInterval(() => {
-        onMove(direction);
+    onMove(dir);
+
+    repeatTimeoutRef.current = setTimeout(() => {
+      repeatIntervalRef.current = setInterval(() => {
+        onMove(dir);
       }, REPEAT_INTERVAL);
     }, REPEAT_DELAY);
   };
 
-  const triggerAttack = () => {
-    if (!disabled) {
-      onAttack();
-    }
-  };
-
-  const triggerHeal = () => {
-    if (!disabled && healingItem?.count > 0) {
-      onUseHeal?.();
-    }
-  };
-
-  if (hidden) {
-    return null;
-  }
+  if (hidden) return null;
 
   return (
-    <div className="md:hidden mt-0.5 w-full shrink-0 pb-[calc(env(safe-area-inset-bottom,0px)+6px)]">
-      <div className="mx-auto grid w-full max-w-[640px] grid-cols-[minmax(188px,1fr)_minmax(96px,132px)] gap-x-3 gap-y-2 rounded-[26px] border border-border/60 bg-card/76 px-3 py-2.5 shadow-2xl shadow-black/25 backdrop-blur sm:grid-cols-[minmax(204px,1fr)_minmax(110px,148px)] sm:gap-x-4 sm:px-5 sm:py-3">
+    <div className="mobile-controls md:hidden w-full shrink-0 mt-auto pb-[calc(env(safe-area-inset-bottom,0px)+6px)]">
+      
+      <div
+        className="
+        mx-auto grid w-full max-w-[640px]
+        grid-cols-[minmax(150px,1fr)_minmax(80px,120px)]
+        gap-x-2 gap-y-1.5
+        rounded-2xl border border-border/60
+        bg-card/70 px-2 py-2
+        shadow-2xl backdrop-blur
+
+        sm:grid-cols-[minmax(200px,1fr)_minmax(100px,140px)]
+        sm:gap-x-4 sm:px-4 sm:py-3
+      "
+      >
+        {/* ATTACK */}
         <div className="col-start-2 row-start-1 flex justify-end">
-          <Btn ariaLabel="Attack" disabled={disabled} onPressEnd={clearTimers} onPressStart={triggerAttack} className="h-24 w-24 border-destructive/50 bg-destructive/15 sm:h-[104px] sm:w-[104px]">
-            <div className="flex flex-col items-center gap-1.5">
-              <Sword className="h-7 w-7 text-destructive sm:h-8 sm:w-8" />
-              <span className="font-pixel text-[10px] text-destructive sm:text-[11px]">УДАР</span>
+          <Btn
+            ariaLabel="Удар"
+            disabled={disabled}
+            onPressEnd={clearTimers}
+            onPressStart={onAttack}
+            className="h-[clamp(60px,12vh,100px)] w-[clamp(60px,12vh,100px)] border-destructive/50 bg-destructive/15"
+          >
+            <div className="flex flex-col items-center gap-1">
+              <Sword className="h-6 w-6 text-destructive" />
+              <span className="font-pixel text-[9px] text-destructive">УДАР</span>
             </div>
           </Btn>
         </div>
 
-        <div className="col-start-1 row-span-2 row-start-1 flex items-start justify-start">
-          <div className="grid h-[188px] w-[188px] shrink-0 grid-cols-3 grid-rows-3 gap-2 rounded-[42px] border border-border/70 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.1),rgba(255,255,255,0)_60%),linear-gradient(180deg,rgba(30,26,50,0.94),rgba(18,15,35,0.96))] p-2.5 shadow-inner shadow-black/25 sm:h-[204px] sm:w-[204px] sm:gap-2.5 sm:p-3">
+        {/* DPAD */}
+        <div className="col-start-1 row-span-2 flex items-start">
+          <div
+            className="
+            grid grid-cols-3 grid-rows-3 gap-1.5
+            rounded-[32px] border border-border/70
+            bg-[linear-gradient(180deg,rgba(30,26,50,0.95),rgba(18,15,35,0.98))]
+            p-2 shadow-inner
+
+            h-[clamp(120px,20vh,180px)]
+            w-[clamp(120px,20vh,180px)]
+          "
+          >
             <div />
-            <Btn ariaLabel="Move up" disabled={disabled} onPressEnd={clearTimers} onPressStart={() => startMove("up")} className="h-full w-full rounded-2xl border-primary/20 bg-primary/10">
-              <ArrowUp className="h-6 w-6 text-foreground sm:h-7 sm:w-7" />
+            <Btn onPressStart={() => startMove("up")} onPressEnd={clearTimers} className="bg-primary/10">
+              <ArrowUp />
             </Btn>
             <div />
-            <Btn ariaLabel="Move left" disabled={disabled} onPressEnd={clearTimers} onPressStart={() => startMove("left")} className="h-full w-full rounded-2xl border-primary/20 bg-primary/10">
-              <ArrowLeft className="h-6 w-6 text-foreground sm:h-7 sm:w-7" />
+
+            <Btn onPressStart={() => startMove("left")} onPressEnd={clearTimers} className="bg-primary/10">
+              <ArrowLeft />
             </Btn>
-            <div className="flex items-center justify-center rounded-2xl border border-primary/10 bg-primary/5">
-              <div className="h-5 w-5 rounded-full bg-primary/30 sm:h-6 sm:w-6" />
+
+            <div className="flex items-center justify-center">
+              <div className="h-3 w-3 rounded-full bg-primary/30" />
             </div>
-            <Btn ariaLabel="Move right" disabled={disabled} onPressEnd={clearTimers} onPressStart={() => startMove("right")} className="h-full w-full rounded-2xl border-primary/20 bg-primary/10">
-              <ArrowRight className="h-6 w-6 text-foreground sm:h-7 sm:w-7" />
+
+            <Btn onPressStart={() => startMove("right")} onPressEnd={clearTimers} className="bg-primary/10">
+              <ArrowRight />
             </Btn>
+
             <div />
-            <Btn ariaLabel="Move down" disabled={disabled} onPressEnd={clearTimers} onPressStart={() => startMove("down")} className="h-full w-full rounded-2xl border-primary/20 bg-primary/10">
-              <ArrowDown className="h-6 w-6 text-foreground sm:h-7 sm:w-7" />
+            <Btn onPressStart={() => startMove("down")} onPressEnd={clearTimers} className="bg-primary/10">
+              <ArrowDown />
             </Btn>
             <div />
           </div>
         </div>
 
-        <div className="col-start-2 row-start-2 flex min-w-0 flex-col items-end gap-1.5">
+        {/* HEAL */}
+        <div className="col-start-2 row-start-2 flex flex-col items-end gap-1">
           {healingItem && (
             <Btn
-              ariaLabel="Use healing potion"
+              ariaLabel="Зілля"
               disabled={disabled || healingItem.count <= 0}
               onPressEnd={clearTimers}
-              onPressStart={triggerHeal}
-              className="h-[88px] w-[88px] border-accent/50 bg-accent/15 sm:h-24 sm:w-24"
+              onPressStart={onUseHeal}
+              className="h-[clamp(50px,10vh,80px)] w-[clamp(50px,10vh,80px)] border-accent/50 bg-accent/15"
             >
-              <div className="flex flex-col items-center gap-1">
-                <PotionIcon className="h-6 w-6 sm:h-7 sm:w-7" />
-                <span className="font-pixel text-[9px] leading-none text-accent">+{healingItem.heal}</span>
-                <span className="font-pixel text-[9px] leading-none text-accent">x{healingItem.count}</span>
+              <div className="flex flex-col items-center text-[8px]">
+                <PotionIcon className="h-5 w-5" />
+                <span>+{healingItem.heal}</span>
+                <span>x{healingItem.count}</span>
               </div>
             </Btn>
           )}
 
-          <div className="w-full" />
-
-            {utilityItems.length > 0 && (
-              <div className="flex w-full justify-end overflow-x-auto pb-0.5">
-                <div className="flex gap-1.5 pl-2 pr-1">
-                  {utilityItems.map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => onUseItem?.(item.id)}
-                      disabled={disabled || item.count <= 0}
-                      className="flex h-8 shrink-0 items-center gap-1 rounded-xl border border-border/80 bg-card/90 px-2 font-pixel text-[9px] text-foreground shadow-sm shadow-black/10 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      <span>{item.emoji}</span>
-                      <span className="text-accent">x{item.count}</span>
-                    </button>
-                  ))}
-                </div>
+          {/* ITEMS */}
+          {utilityItems.length > 0 && (
+            <div className="flex w-full justify-end overflow-x-auto max-h-[36px]">
+              <div className="flex gap-1">
+                {utilityItems.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => onUseItem?.(item.id)}
+                    className="h-7 px-2 text-[8px] rounded-lg bg-card/90"
+                  >
+                    {item.emoji} x{item.count}
+                  </button>
+                ))}
               </div>
-            )}
+            </div>
+          )}
         </div>
       </div>
+
+      {/* HEIGHT ADAPTATION */}
+      <style jsx>{`
+        @media (max-height: 700px) {
+          .mobile-controls {
+            transform: scale(0.9);
+          }
+        }
+
+        @media (max-height: 600px) {
+          .mobile-controls {
+            transform: scale(0.8);
+          }
+        }
+      `}</style>
     </div>
   );
 }
+
+return (
+  <div className="game-screen">
+    <div className="game-layout">
+
+      {/* ===== HUD (УЩІЛЬНЕНИЙ) ===== */}
+      <div className="hud">
+        <GameUI
+          {...uiState}
+          onPause={togglePause}
+          onHome={handleHome}
+          gameOver={gameOver}
+          isPaused={isPaused}
+          phase={effectivePhase}
+          onRestart={onRestart}
+          onClaimReward={claimReward}
+          onChooseReward={chooseReward}
+          rewardSelectedId={rewardSelectedId}
+          onStartBoss={startBossBattle}
+        />
+      </div>
+
+      {/* ===== CANVAS (ГОЛОВНИЙ БЛОК) ===== */}
+      <div
+        ref={canvasViewportRef}
+        className="canvas-container"
+      >
+        <canvas
+          ref={canvasRef}
+          width={canvasSize.w}
+          height={canvasSize.h}
+          style={{
+            width: canvasDisplaySize.w,
+            height: canvasDisplaySize.h,
+          }}
+          className="block"
+        />
+      </div>
+
+      {/* ===== CONTROLS (ПРИТИСНУТІ ВНИЗ) ===== */}
+      <MobileRPGControls
+        disabled={
+          gameOver ||
+          isPaused ||
+          effectivePhase !== "playing"
+        }
+        onMove={movePlayerWithAutoAttack}
+        onAttack={attack}
+        onUseHeal={() => handleUseItem("potion")}
+        onUseItem={handleUseItem}
+        healingItem={uiState?.inventory?.find(i => i.id === "potion")}
+        utilityItems={uiState?.inventory?.filter(i => i.id !== "potion") || []}
+      />
+
+    </div>
+  </div>
+);

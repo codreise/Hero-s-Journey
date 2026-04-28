@@ -51,7 +51,7 @@ const ENEMY_ARCHETYPES = {
     coins: 3,
     behavior: "pack",
     aggroRange: 7,
-    moveInterval: [30, 40],
+    moveInterval: [32, 42],
     unlockWave: 1,
   },
   skeleton: {
@@ -65,7 +65,7 @@ const ENEMY_ARCHETYPES = {
     coins: 5,
     behavior: "hunter",
     aggroRange: 7,
-    moveInterval: [34, 46],
+    moveInterval: [36, 48],
     unlockWave: 3,
   },
   wolf: {
@@ -577,30 +577,30 @@ export function createBossEnemy(id, player, wave) {
 
 export function spawnWaveEnemies(map, player, wave) {
   if (isBossWave(wave)) {
-    return [createBossEnemy(0, player, wave)];
+    return [createBossEnemy(0, player, wave, map)];
   }
 
   const earlyWaveCounts = {
     1: 3,
     2: 4,
-    3: 5,
+    3: 6,
   };
   const enemyCount = earlyWaveCounts[wave] || Math.min(4 + Math.floor(wave * 0.8) + (wave >= 3 ? 1 : 0), 12);
   return spawnEnemies(map, player, enemyCount, wave);
 }
 
-export function generateMap() {
-  const map = Array.from({ length: ROWS }, (_, r) =>
-    Array.from({ length: COLS }, (_, c) =>
-      r === 0 || r === ROWS - 1 || c === 0 || c === COLS - 1 ? TILE.WALL : TILE.FLOOR
+export function generateMap(rows = ROWS, cols = COLS) {
+  const map = Array.from({ length: rows }, (_, r) =>
+    Array.from({ length: cols }, (_, c) =>
+      r === 0 || r === rows - 1 || c === 0 || c === cols - 1
+        ? TILE.WALL
+        : TILE.FLOOR
     )
   );
 
+  // ⚠️ wallSeeds адаптуй
   const wallSeeds = [
-    [3, 3], [3, 4], [4, 3], [8, 2], [8, 3], [8, 4],
-    [12, 5], [13, 5], [14, 5], [5, 8], [5, 9], [5, 10],
-    [10, 9], [10, 10], [14, 9], [14, 10], [14, 11],
-    [6, 6], [7, 6], [3, 11], [4, 11], [16, 3], [16, 4],
+    [3, 3], [3, 4], [4, 3],
   ];
 
   wallSeeds.forEach(([row, col]) => {
@@ -611,11 +611,16 @@ export function generateMap() {
 
   return map;
 }
-
 export function isWall(map, x, y) {
-  if (x < 0 || y < 0 || x >= COLS || y >= ROWS) {
+  if (!map || !map.length) return true;
+
+  const rows = map.length;
+  const cols = map[0].length;
+
+  if (x < 0 || y < 0 || x >= cols || y >= rows) {
     return true;
   }
+
   return map[y][x] === TILE.WALL;
 }
 

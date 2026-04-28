@@ -31,7 +31,8 @@ const WALL_DARK = "#211d1b";
 const WALL_TOP = "#5f564d";
 const WALL_HIGHLIGHT = "#7a6b58";
 const GRID_COLOR = "rgba(214, 185, 121, 0.12)";
-const ENEMY_MELEE_TELEGRAPH_FRAMES = 14;
+const ENEMY_MELEE_TELEGRAPH_FRAMES = 12;
+const ATTACK_PULSE_DURATION_MS = 190;
 const EMOJI_FONT_STACK = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
 const MOBILE_AUTO_ATTACK_DELAY_MS = 35;
 const emojiSpriteCache = new Map();
@@ -411,6 +412,53 @@ function drawEnemyMeleeTelegraph(ctx, enemy, renderX = enemy.x, renderY = enemy.
   ctx.lineTo(ex + 8, ey + 8);
   ctx.moveTo(ex + 8, ey - 8);
   ctx.lineTo(ex - 8, ey + 8);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawPlayerAttackEffect(ctx, attackPulse, renderPositions, now) {
+  if (!attackPulse || attackPulse.expiresAt <= now) {
+    return;
+  }
+
+  const totalDuration = Math.max(1, attackPulse.duration || ATTACK_PULSE_DURATION_MS);
+  const progress = 1 - Math.max(0, attackPulse.expiresAt - now) / totalDuration;
+  const targetX = attackPulse.x * GRID + GRID / 2;
+  const targetY = attackPulse.y * GRID + GRID / 2;
+  const playerX = renderPositions.player.x * GRID + GRID / 2;
+  const playerY = renderPositions.player.y * GRID + GRID / 2;
+  const angle = Math.atan2(targetY - playerY, targetX - playerX);
+  const color = attackPulse.defeated ? "#9cff57" : attackPulse.critical ? "#ffd166" : "#ff6b6b";
+  const arcDistance = Math.min(GRID * 1.15, Math.max(GRID * 0.72, Math.hypot(targetX - playerX, targetY - playerY) * 0.78));
+  const arcCenterX = playerX + Math.cos(angle) * arcDistance * 0.58;
+  const arcCenterY = playerY + Math.sin(angle) * arcDistance * 0.58;
+  const arcRadius = GRID * (0.48 + progress * 0.16);
+
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, 1 - progress * 0.45);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = attackPulse.critical ? 4.5 : 3.5;
+  ctx.lineCap = "round";
+  ctx.shadowColor = color;
+  ctx.shadowBlur = attackPulse.critical ? 22 : 16;
+  ctx.beginPath();
+  ctx.arc(arcCenterX, arcCenterY, arcRadius, angle - 1.15, angle + 0.95);
+  ctx.stroke();
+
+  ctx.globalAlpha = Math.max(0, 0.88 - progress * 0.35);
+  ctx.fillStyle = attackPulse.critical ? "rgba(255, 209, 102, 0.22)" : "rgba(255, 107, 107, 0.18)";
+  ctx.beginPath();
+  ctx.ellipse(targetX, targetY, GRID * (0.38 + progress * 0.28), GRID * (0.24 + progress * 0.16), angle, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.globalAlpha = Math.max(0, 1 - progress);
+  ctx.strokeStyle = "#fff4c2";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(targetX - 5, targetY);
+  ctx.lineTo(targetX + 5, targetY);
+  ctx.moveTo(targetX, targetY - 5);
+  ctx.lineTo(targetX, targetY + 5);
   ctx.stroke();
   ctx.restore();
 }
@@ -1115,7 +1163,8 @@ export default function RPGGame({
       y: target.y,
       critical: isCritical,
       defeated: target.hp <= 0,
-      expiresAt: now + 140,
+      duration: ATTACK_PULSE_DURATION_MS,
+      expiresAt: now + ATTACK_PULSE_DURATION_MS,
     };
     triggerScreenShake(isCritical ? 5 : 3, isCritical ? 110 : 80);
     addFloat(isCritical ? `КРИТ -${dmg}` : `-${dmg}`, isCritical ? "#ffd166" : "#ff4466", target.x, target.y);
@@ -1557,15 +1606,18 @@ export default function RPGGame({
 
       const attackPulse = attackPulseRef.current;
       if (attackPulse && attackPulse.expiresAt > now) {
+        drawPlayerAttackEffect(ctx, attackPulse, renderPositions, now);
         const pulseX = attackPulse.x * GRID + GRID / 2;
         const pulseY = attackPulse.y * GRID + GRID / 2;
+        const pulseProgress = 1 - Math.max(0, attackPulse.expiresAt - now) / Math.max(1, attackPulse.duration || ATTACK_PULSE_DURATION_MS);
         ctx.save();
+        ctx.globalAlpha = Math.max(0, 1 - pulseProgress * 0.55);
         ctx.strokeStyle = attackPulse.defeated ? "#9cff57" : attackPulse.critical ? "#ffd166" : "#ff6b6b";
         ctx.lineWidth = attackPulse.critical ? 4 : 3;
         ctx.shadowColor = attackPulse.defeated ? "#9cff57" : attackPulse.critical ? "#ffd166" : "#ff6b6b";
         ctx.shadowBlur = attackPulse.defeated ? 18 : 14;
         ctx.beginPath();
-        ctx.arc(pulseX, pulseY, attackPulse.defeated ? 18 : attackPulse.critical ? 15 : 12, 0, Math.PI * 2);
+        ctx.arc(pulseX, pulseY, (attackPulse.defeated ? 18 : attackPulse.critical ? 15 : 12) + pulseProgress * 8, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
       } else if (attackPulse) {
@@ -1622,7 +1674,7 @@ export default function RPGGame({
   }, [applyDamageToPlayer, canvasSize.h, canvasSize.w, gameOver, isCountdownActive, isPaused, persistState, syncUI]);
 
   return (
-    <div className="flex h-full min-h-0 w-full max-w-[920px] flex-col gap-0.5 pb-[calc(env(safe-area-inset-bottom,0px)+1px)] sm:gap-2.5 lg:max-w-[1040px]">
+    <div className="flex h-full min-h-0 w-full max-w-none flex-col gap-0 overflow-hidden pb-0 md:max-w-[920px] md:gap-2.5 md:pb-[calc(env(safe-area-inset-bottom,0px)+1px)] lg:max-w-[1040px]">
       {uiState && (
         <GameUI
           {...uiState}
@@ -1638,10 +1690,10 @@ export default function RPGGame({
         />
       )}
 
-      <div className="w-full flex-1 min-h-0 rounded-2xl border border-border bg-card/40 p-0 shadow-xl shadow-black/20 sm:p-2.5 lg:p-3">
+      <div className="w-full flex-1 min-h-0 overflow-hidden bg-card/40 p-0 shadow-xl shadow-black/20 md:rounded-2xl md:border md:border-border md:p-2.5 lg:p-3">
         <div ref={canvasViewportRef} className="flex h-full min-h-0 items-center justify-center">
           <div
-            className="relative overflow-hidden rounded-xl"
+            className="relative overflow-hidden md:rounded-xl"
             style={{
               width: `${canvasDisplaySize.w}px`,
               height: `${canvasDisplaySize.h}px`,
@@ -1653,7 +1705,7 @@ export default function RPGGame({
               ref={canvasRef}
               width={canvasSize.w}
               height={canvasSize.h}
-              className="block h-full w-full rounded-xl border-2 border-border bg-[#171d1c] touch-none"
+              className="block h-full w-full bg-[#171d1c] touch-none md:rounded-xl md:border-2 md:border-border"
               style={{ imageRendering: "pixelated" }}
             />
             {floats.map((floatValue) => (
