@@ -580,7 +580,12 @@ export function spawnWaveEnemies(map, player, wave) {
     return [createBossEnemy(0, player, wave)];
   }
 
-  const enemyCount = Math.min(4 + Math.floor(wave * 0.8) + (wave >= 3 ? 1 : 0), 12);
+  const earlyWaveCounts = {
+    1: 3,
+    2: 4,
+    3: 5,
+  };
+  const enemyCount = earlyWaveCounts[wave] || Math.min(4 + Math.floor(wave * 0.8) + (wave >= 3 ? 1 : 0), 12);
   return spawnEnemies(map, player, enemyCount, wave);
 }
 

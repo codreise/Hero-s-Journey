@@ -22,10 +22,16 @@ import GameUI from "./GameUI";
 import MobileRPGControls from "./MobileRPGControls";
 import { useTelegramMiniApp } from "../../lib/telegram-mini-app";
 
-const FLOOR_COLOR = "#1a1040";
-const WALL_COLOR = "#3a2870";
-const WALL_TOP = "#5540a0";
-const GRID_COLOR = "#221550";
+const FLOOR_COLOR = "#202725";
+const FLOOR_ALT = "#26302d";
+const FLOOR_EDGE = "#151b1a";
+const FLOOR_MOSS = "#405d3c";
+const WALL_COLOR = "#3a342f";
+const WALL_DARK = "#211d1b";
+const WALL_TOP = "#5f564d";
+const WALL_HIGHLIGHT = "#7a6b58";
+const GRID_COLOR = "rgba(214, 185, 121, 0.12)";
+const ENEMY_MELEE_TELEGRAPH_FRAMES = 14;
 const EMOJI_FONT_STACK = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
 const MOBILE_AUTO_ATTACK_DELAY_MS = 35;
 const emojiSpriteCache = new Map();
@@ -372,6 +378,115 @@ function drawProjectile(ctx, projectile) {
   ctx.restore();
 }
 
+function isAdjacentToPlayer(enemy, player) {
+  return Math.abs(enemy.x - player.x) + Math.abs(enemy.y - player.y) === 1;
+}
+
+function drawEnemyMeleeTelegraph(ctx, enemy, renderX = enemy.x, renderY = enemy.y) {
+  const charge = enemy.meleeCharge;
+  if (!charge) {
+    return;
+  }
+
+  const progress = 1 - Math.max(0, charge.framesLeft) / Math.max(1, charge.totalFrames || ENEMY_MELEE_TELEGRAPH_FRAMES);
+  const ex = renderX * GRID + GRID / 2;
+  const ey = renderY * GRID + GRID / 2;
+  const radius = 8 + progress * 8;
+
+  ctx.save();
+  ctx.globalAlpha = 0.55 + progress * 0.35;
+  ctx.strokeStyle = enemy.isBoss ? "#ff7a18" : "#ff8844";
+  ctx.fillStyle = enemy.isBoss ? "rgba(255, 122, 24, 0.16)" : "rgba(255, 136, 68, 0.18)";
+  ctx.shadowColor = ctx.strokeStyle;
+  ctx.shadowBlur = 10;
+  ctx.lineWidth = 1.5 + progress * 1.3;
+  ctx.beginPath();
+  ctx.arc(ex, ey, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.globalAlpha = 0.75;
+  ctx.beginPath();
+  ctx.moveTo(ex - 8, ey - 8);
+  ctx.lineTo(ex + 8, ey + 8);
+  ctx.moveTo(ex + 8, ey - 8);
+  ctx.lineTo(ex - 8, ey + 8);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function getTileNoise(row, col) {
+  const raw = Math.sin((row * 91 + col * 57 + 13) * 12.9898) * 43758.5453;
+  return raw - Math.floor(raw);
+}
+
+function drawFloorTile(ctx, x, y, row, col) {
+  const noise = getTileNoise(row, col);
+  ctx.fillStyle = noise > 0.55 ? FLOOR_ALT : FLOOR_COLOR;
+  ctx.fillRect(x, y, GRID, GRID);
+
+  ctx.strokeStyle = GRID_COLOR;
+  ctx.lineWidth = 0.45;
+  ctx.strokeRect(x + 0.5, y + 0.5, GRID - 1, GRID - 1);
+
+  if (noise > 0.76) {
+    ctx.strokeStyle = "rgba(15, 19, 18, 0.38)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + GRID * 0.22, y + GRID * 0.34);
+    ctx.lineTo(x + GRID * 0.48, y + GRID * 0.46);
+    ctx.lineTo(x + GRID * 0.7, y + GRID * 0.28);
+    ctx.stroke();
+  }
+
+  if (noise < 0.16) {
+    ctx.fillStyle = "rgba(64, 93, 60, 0.42)";
+    ctx.beginPath();
+    ctx.ellipse(x + GRID * 0.72, y + GRID * 0.72, GRID * 0.18, GRID * 0.08, -0.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawWallTile(ctx, x, y, row, col) {
+  const noise = getTileNoise(row, col);
+  ctx.fillStyle = noise > 0.5 ? "#443d36" : WALL_COLOR;
+  ctx.fillRect(x, y, GRID, GRID);
+
+  ctx.fillStyle = WALL_TOP;
+  ctx.fillRect(x, y, GRID, 5);
+  ctx.fillStyle = WALL_HIGHLIGHT;
+  ctx.fillRect(x + 2, y + 2, GRID - 4, 1.5);
+
+  ctx.fillStyle = WALL_DARK;
+  ctx.fillRect(x, y + GRID - 5, GRID, 5);
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.24)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, GRID - 1, GRID - 1);
+
+  if (noise > 0.72) {
+    ctx.strokeStyle = "rgba(13, 11, 10, 0.36)";
+    ctx.beginPath();
+    ctx.moveTo(x + GRID * 0.18, y + GRID * 0.48);
+    ctx.lineTo(x + GRID * 0.82, y + GRID * 0.42);
+    ctx.stroke();
+  }
+}
+
+function drawArenaLighting(ctx, width, height) {
+  const centerGlow = ctx.createRadialGradient(width * 0.5, height * 0.48, GRID * 2, width * 0.5, height * 0.5, width * 0.72);
+  centerGlow.addColorStop(0, "rgba(237, 191, 105, 0.15)");
+  centerGlow.addColorStop(0.46, "rgba(70, 87, 61, 0.08)");
+  centerGlow.addColorStop(1, "rgba(0, 0, 0, 0.36)");
+  ctx.fillStyle = centerGlow;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = "rgba(0, 0, 0, 0.22)";
+  ctx.fillRect(0, 0, width, GRID * 0.55);
+  ctx.fillRect(0, height - GRID * 0.5, width, GRID * 0.5);
+  ctx.fillRect(0, 0, GRID * 0.45, height);
+  ctx.fillRect(width - GRID * 0.45, 0, GRID * 0.45, height);
+}
+
 function buildMapLayer(map) {
   if (typeof document === "undefined") {
     return null;
@@ -385,7 +500,11 @@ function buildMapLayer(map) {
     return null;
   }
 
-  ctx.fillStyle = FLOOR_COLOR;
+  const baseGradient = ctx.createLinearGradient(0, 0, layer.width, layer.height);
+  baseGradient.addColorStop(0, "#24302c");
+  baseGradient.addColorStop(0.5, FLOOR_COLOR);
+  baseGradient.addColorStop(1, "#171d1c");
+  ctx.fillStyle = baseGradient;
   ctx.fillRect(0, 0, layer.width, layer.height);
 
   for (let r = 0; r < ROWS; r += 1) {
@@ -393,17 +512,27 @@ function buildMapLayer(map) {
       const x = c * GRID;
       const y = r * GRID;
       if (map[r][c] === TILE.WALL) {
-        ctx.fillStyle = WALL_COLOR;
-        ctx.fillRect(x, y, GRID, GRID);
-        ctx.fillStyle = WALL_TOP;
-        ctx.fillRect(x, y, GRID, 4);
+        drawWallTile(ctx, x, y, r, c);
       } else {
-        ctx.strokeStyle = GRID_COLOR;
-        ctx.lineWidth = 0.4;
-        ctx.strokeRect(x, y, GRID, GRID);
+        drawFloorTile(ctx, x, y, r, c);
       }
     }
   }
+
+  ctx.fillStyle = "rgba(18, 24, 21, 0.42)";
+  for (let r = 1; r < ROWS - 1; r += 1) {
+    for (let c = 1; c < COLS - 1; c += 1) {
+      if (map[r][c] !== TILE.WALL && (
+        map[r - 1][c] === TILE.WALL
+        || map[r][c - 1] === TILE.WALL
+        || map[r][c + 1] === TILE.WALL
+      )) {
+        ctx.fillRect(c * GRID, r * GRID, GRID, GRID * 0.18);
+      }
+    }
+  }
+
+  drawArenaLighting(ctx, layer.width, layer.height);
 
   return layer;
 }
@@ -1233,6 +1362,18 @@ export default function RPGGame({
         let shouldPersistAfterProjectiles = false;
 
         currentState.enemies.forEach((enemy) => {
+          if (enemy.meleeCharge) {
+            enemy.meleeCharge.framesLeft -= 1;
+            if (enemy.meleeCharge.framesLeft <= 0) {
+              if (isAdjacentToPlayer(enemy, currentState.player)) {
+                const dmg = enemy.atk + Math.floor(Math.random() * 2);
+                didStateChange = applyDamageToPlayer(currentState, dmg, "#ff8844") || didStateChange;
+              }
+              enemy.meleeCharge = null;
+            }
+            return;
+          }
+
           enemy.moveTimer += 1;
           if (enemy.isBoss && enemy.projectileInterval) {
             const distanceToPlayer = Math.abs(enemy.x - currentState.player.x) + Math.abs(enemy.y - currentState.player.y);
@@ -1264,9 +1405,11 @@ export default function RPGGame({
               didStateChange = true;
             }
 
-            if (Math.abs(enemy.x - currentState.player.x) + Math.abs(enemy.y - currentState.player.y) === 1) {
-              const dmg = enemy.atk + Math.floor(Math.random() * 2);
-              didStateChange = applyDamageToPlayer(currentState, dmg, "#ff8844") || didStateChange;
+            if (isAdjacentToPlayer(enemy, currentState.player)) {
+              enemy.meleeCharge = {
+                framesLeft: ENEMY_MELEE_TELEGRAPH_FRAMES,
+                totalFrames: ENEMY_MELEE_TELEGRAPH_FRAMES,
+              };
             }
           }
         });
@@ -1349,6 +1492,10 @@ export default function RPGGame({
         if (enemy.isBoss && enemy.projectileCharge) {
           const renderEnemy = renderPositions.enemies.get(enemy.id) || { x: enemy.x, y: enemy.y };
           drawBossTelegraph(ctx, enemy, currentState.map, renderEnemy.x, renderEnemy.y);
+        }
+        if (enemy.meleeCharge) {
+          const renderEnemy = renderPositions.enemies.get(enemy.id) || { x: enemy.x, y: enemy.y };
+          drawEnemyMeleeTelegraph(ctx, enemy, renderEnemy.x, renderEnemy.y);
         }
       });
 
@@ -1506,7 +1653,7 @@ export default function RPGGame({
               ref={canvasRef}
               width={canvasSize.w}
               height={canvasSize.h}
-              className="block h-full w-full rounded-xl border-2 border-border bg-[#140b34] touch-none"
+              className="block h-full w-full rounded-xl border-2 border-border bg-[#171d1c] touch-none"
               style={{ imageRendering: "pixelated" }}
             />
             {floats.map((floatValue) => (
