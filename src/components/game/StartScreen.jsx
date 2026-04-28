@@ -10,14 +10,20 @@ export default function StartScreen({
   saveError,
   savedGame,
 }) {
-  const safeProfile = profile || { essence: 0, totalGold: 0, bestWave: 1, runsPlayed: 0, bossesDefeated: 0 };
+  const safeProfile = profile || {
+    essence: 0,
+    totalGold: 0,
+    bestWave: 1,
+    runsPlayed: 0,
+    bossesDefeated: 0,
+  };
 
   return (
     <div className="w-full max-w-xl rounded-[28px] border border-border/70 bg-card/85 px-5 py-6 shadow-2xl shadow-black/30 backdrop-blur sm:px-7 sm:py-7">
       <div className="space-y-6">
         <div className="space-y-2 text-center">
           <p className="font-pixel text-[10px] uppercase tracking-[0.35em] text-primary/80 sm:text-xs">Arcade RPG</p>
-          <h1 className="font-pixel text-xl leading-relaxed text-foreground sm:text-2xl">Hero’s Journey</h1>
+          <h1 className="font-pixel text-xl leading-relaxed text-foreground sm:text-2xl">Hero's Journey</h1>
           <div className="space-y-1 pt-1">
             <p className="font-pixel text-[10px] text-muted-foreground sm:text-xs">Перемагай ворогів, збирай золото, проходь далі.</p>
             <p className="font-pixel text-[9px] text-muted-foreground/85 sm:text-[10px]">Рух: WASD або стрілки. Удар: пробіл. Пауза: P або Esc.</p>

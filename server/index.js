@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { startBot } from "../bot/index.js";
+import { getRunningBot, startBot } from "../bot/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -167,6 +167,24 @@ async function parseRequestBody(request) {
 
 const server = createServer(async (request, response) => {
   const requestUrl = new URL(request.url || "/", `http://${request.headers.host}`);
+  const botRuntime = getRunningBot();
+
+  if (
+    botRuntime?.mode === "webhook"
+    && request.method === "POST"
+    && requestUrl.pathname === botRuntime.webhookPath
+  ) {
+    try {
+      const update = await parseRequestBody(request);
+      await botRuntime.bot.handleUpdate(update);
+      response.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+      response.end("OK");
+    } catch (error) {
+      response.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
+      response.end(error instanceof Error ? error.message : "Webhook error");
+    }
+    return;
+  }
 
   if (request.method === "OPTIONS") {
     sendJson(response, 204, {});
@@ -238,6 +256,6 @@ server.listen(PORT, () => {
   console.log(`Save server listening on http://localhost:${PORT}`);
 });
 
-startBot().catch((error) => {
+startBot({ mode: "auto" }).catch((error) => {
   console.error("Telegram bot failed to start:", error instanceof Error ? error.message : error);
 });

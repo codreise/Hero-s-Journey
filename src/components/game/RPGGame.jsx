@@ -1162,13 +1162,16 @@ export default function RPGGame({
           ctx.stroke();
 
           const emojiSprite = getEmojiSprite(enemy.emoji);
-          const spriteSize = renderStyle.fontSize + 6;
-          const emojiY = ey + (renderStyle.emojiOffsetY || 0);
+          // Increase sprite size for clearer visuals and enable image smoothing
+          const spriteSize = Math.round((renderStyle.fontSize + 6) * 1.6);
+          const emojiY = ey + (renderStyle.emojiOffsetY || 0) - 2;
 
           if (emojiSprite?.complete && emojiSprite.naturalWidth > 0) {
+            ctx.imageSmoothingEnabled = true;
+            try { ctx.imageSmoothingQuality = 'high'; } catch (e) {}
             ctx.drawImage(emojiSprite, ex - spriteSize / 2, emojiY - spriteSize / 2, spriteSize, spriteSize);
           } else {
-            ctx.font = `${renderStyle.fontSize}px ${EMOJI_FONT_STACK}`;
+            ctx.font = `${Math.round(renderStyle.fontSize * 1.2)}px ${EMOJI_FONT_STACK}`;
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.fillText(enemy.emoji, ex, emojiY);

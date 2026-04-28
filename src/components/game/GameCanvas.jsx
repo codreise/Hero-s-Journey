@@ -1,11 +1,125 @@
-import React, { useRef, useEffect, useCallback, useState } from "react";
+﻿import React, { useRef, useEffect, useCallback, useState } from "react";
 
 const GRID = 20;
-const PLAYER_COLOR = "#60E0FF";
-const COIN_COLOR = "#FFD700";
-const OBSTACLE_COLOR = "#FF4466";
 const BG_COLOR = "#1a1040";
 const GRID_COLOR = "#251660";
+
+// Draw beautiful sprites
+function drawPlayer(ctx, x, y, size, invincible, timestamp) {
+  const blink = invincible > 0 && Math.floor(timestamp / 80) % 2 === 0;
+  if (blink) return;
+
+  const cx = x + size / 2;
+  const cy = y + size / 2;
+
+  // Glow effect
+  ctx.shadowColor = "#60E0FF";
+  ctx.shadowBlur = 15;
+  
+  // Main body gradient
+  const grad = ctx.createRadialGradient(cx, cy, 1, cx, cy, size / 2.2);
+  grad.addColorStop(0, "#FFFFFF");
+  grad.addColorStop(0.4, "#00FFFF");
+  grad.addColorStop(1, "#60E0FF");
+  
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, size / 2.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Eyes - black
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = "#000000";
+  ctx.beginPath();
+  ctx.arc(cx - 4, cy - 3, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx + 4, cy - 3, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Pupils - bright
+  ctx.fillStyle = "#FFFFFF";
+  ctx.beginPath();
+  ctx.arc(cx - 3, cy - 4, 1.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx + 5, cy - 4, 1.2, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawCoin(ctx, x, y, size, timestamp) {
+  const cx = x + size / 2;
+  const cy = y + size / 2;
+  const pulse = Math.sin(timestamp * 0.006) * 1.5;
+  const radius = size / 2.2 + pulse;
+
+  // Gold gradient
+  const grad = ctx.createRadialGradient(
+    cx - 3, cy - 3, 1,
+    cx, cy, radius
+  );
+  grad.addColorStop(0, "#FFFFFF");
+  grad.addColorStop(0.3, "#FFFF99");
+  grad.addColorStop(0.7, "#FFD700");
+  grad.addColorStop(1, "#AA8800");
+
+  ctx.shadowColor = "#FFD700";
+  ctx.shadowBlur = 12 + Math.abs(pulse);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Inner light
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = "rgba(255, 255, 200, 0.8)";
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius * 0.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Shine spot
+  ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+  ctx.beginPath();
+  ctx.arc(cx - radius * 0.35, cy - radius * 0.35, radius * 0.3, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawObstacle(ctx, x, y, size, timestamp) {
+  const cx = x + size / 2;
+  const cy = y + size / 2;
+  const angle = (timestamp * 0.0004) % (Math.PI * 2);
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(angle);
+
+  // Crystal top - bright red
+  ctx.fillStyle = "#FF6688";
+  ctx.shadowColor = "#FF4466";
+  ctx.shadowBlur = 12;
+  ctx.beginPath();
+  ctx.moveTo(0, -size * 0.45);
+  ctx.lineTo(size * 0.4, -size * 0.12);
+  ctx.lineTo(size * 0.35, size * 0.25);
+  ctx.lineTo(0, size * 0.35);
+  ctx.lineTo(-size * 0.35, size * 0.25);
+  ctx.lineTo(-size * 0.4, -size * 0.12);
+  ctx.closePath();
+  ctx.fill();
+
+  // Crystal bottom - dark red
+  ctx.fillStyle = "#DD3355";
+  ctx.beginPath();
+  ctx.moveTo(size * 0.4, -size * 0.12);
+  ctx.lineTo(size * 0.55, size * 0.35);
+  ctx.lineTo(0, size * 0.48);
+  ctx.lineTo(-size * 0.55, size * 0.35);
+  ctx.lineTo(-size * 0.4, -size * 0.12);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+}
 
 function randomPos(cols, rows, exclude = []) {
   let pos;
@@ -75,7 +189,6 @@ export default function GameCanvas({ onScoreChange, onLivesChange, onGameOver, g
     onGameOver(false);
   }, [getGridDimensions, onScoreChange, onLivesChange, onGameOver]);
 
-  // Calculate canvas size
   useEffect(() => {
     const updateSize = () => {
       const maxSize = Math.min(window.innerWidth - 32, 480);
@@ -87,18 +200,16 @@ export default function GameCanvas({ onScoreChange, onLivesChange, onGameOver, g
     return () => window.removeEventListener("resize", updateSize);
   }, []);
 
-  // Init game when gameKey or size changes
   useEffect(() => {
     initGame(canvasSize);
   }, [gameKey, canvasSize, initGame]);
 
-  // Move player function — called directly on keydown & touch
   const movePlayer = useCallback((dir) => {
     const state = stateRef.current;
     if (!state || state.gameOver) return;
 
     const now = performance.now();
-    if (now - lastMoveTimeRef.current < 100) return; // throttle 100ms
+    if (now - lastMoveTimeRef.current < 100) return;
     lastMoveTimeRef.current = now;
 
     const prev = { ...state.player };
@@ -107,10 +218,7 @@ export default function GameCanvas({ onScoreChange, onLivesChange, onGameOver, g
     if (dir === "left")  state.player.x = Math.max(0, state.player.x - 1);
     if (dir === "right") state.player.x = Math.min(state.cols - 1, state.player.x + 1);
 
-    // Check coin collision
-    const coinIdx = state.coins.findIndex(
-      (c) => c.x === state.player.x && c.y === state.player.y
-    );
+    const coinIdx = state.coins.findIndex((c) => c.x === state.player.x && c.y === state.player.y);
     if (coinIdx >= 0) {
       state.coins.splice(coinIdx, 1);
       state.score += 10;
@@ -122,24 +230,17 @@ export default function GameCanvas({ onScoreChange, onLivesChange, onGameOver, g
           vx: (Math.random() - 0.5) * 4,
           vy: (Math.random() - 0.5) * 4,
           life: 1,
-          color: COIN_COLOR,
+          color: "#FFD700",
         });
       }
-      state.coins.push(
-        randomPos(state.cols, state.rows, [state.player, ...state.coins, ...state.obstacles])
-      );
+      state.coins.push(randomPos(state.cols, state.rows, [state.player, ...state.coins, ...state.obstacles]));
       if (state.score % 50 === 0) {
-        state.obstacles.push(
-          randomPos(state.cols, state.rows, [state.player, ...state.coins, ...state.obstacles])
-        );
+        state.obstacles.push(randomPos(state.cols, state.rows, [state.player, ...state.coins, ...state.obstacles]));
       }
     }
 
-    // Check obstacle collision
     if (state.invincible <= 0) {
-      const hitObs = state.obstacles.some(
-        (o) => o.x === state.player.x && o.y === state.player.y
-      );
+      const hitObs = state.obstacles.some((o) => o.x === state.player.x && o.y === state.player.y);
       if (hitObs) {
         state.lives -= 1;
         state.invincible = 15;
@@ -151,14 +252,13 @@ export default function GameCanvas({ onScoreChange, onLivesChange, onGameOver, g
             vx: (Math.random() - 0.5) * 5,
             vy: (Math.random() - 0.5) * 5,
             life: 1,
-            color: OBSTACLE_COLOR,
+            color: "#FF4466",
           });
         }
         if (state.lives <= 0) {
           state.gameOver = true;
           onGameOver(true);
         }
-        // Push player back
         state.player.x = prev.x;
         state.player.y = prev.y;
       }
@@ -167,7 +267,6 @@ export default function GameCanvas({ onScoreChange, onLivesChange, onGameOver, g
     }
   }, [onScoreChange, onLivesChange, onGameOver]);
 
-  // Keyboard input — direct call to movePlayer
   useEffect(() => {
     const handleKey = (e) => {
       const map = {
@@ -183,7 +282,6 @@ export default function GameCanvas({ onScoreChange, onLivesChange, onGameOver, g
     return () => window.removeEventListener("keydown", handleKey);
   }, [movePlayer]);
 
-  // Mobile direction via ref polling
   useEffect(() => {
     if (!directionRef) return;
     const interval = setInterval(() => {
@@ -195,7 +293,6 @@ export default function GameCanvas({ onScoreChange, onLivesChange, onGameOver, g
     return () => clearInterval(interval);
   }, [directionRef, movePlayer]);
 
-  // Render loop (animation only — no move logic here)
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -208,7 +305,6 @@ export default function GameCanvas({ onScoreChange, onLivesChange, onGameOver, g
         return;
       }
 
-      // Update particles
       state.particles = state.particles.filter((p) => {
         p.x += p.vx;
         p.y += p.vy;
@@ -216,16 +312,10 @@ export default function GameCanvas({ onScoreChange, onLivesChange, onGameOver, g
         return p.life > 0;
       });
 
-      // Decay invincible frames over time
-      if (state.invincible > 0 && Math.floor(timestamp / 80) % 2 === 0) {
-        // just used for blinking visual
-      }
-
       const s = canvasSize;
       ctx.fillStyle = BG_COLOR;
       ctx.fillRect(0, 0, s, s);
 
-      // Grid lines
       ctx.strokeStyle = GRID_COLOR;
       ctx.lineWidth = 0.5;
       for (let i = 0; i <= state.cols; i++) {
@@ -241,50 +331,24 @@ export default function GameCanvas({ onScoreChange, onLivesChange, onGameOver, g
         ctx.stroke();
       }
 
-      // Obstacles
+      // Draw obstacles
       state.obstacles.forEach((o) => {
-        ctx.fillStyle = OBSTACLE_COLOR;
-        ctx.shadowColor = OBSTACLE_COLOR;
-        ctx.shadowBlur = 6;
-        ctx.fillRect(o.x * GRID + 2, o.y * GRID + 2, GRID - 4, GRID - 4);
-        ctx.shadowBlur = 0;
+        drawObstacle(ctx, o.x * GRID, o.y * GRID, GRID, timestamp);
       });
 
-      // Coins (pulsing)
-      const pulse = Math.sin(timestamp * 0.005) * 2;
+      // Draw coins
       state.coins.forEach((c) => {
-        ctx.fillStyle = COIN_COLOR;
-        ctx.shadowColor = COIN_COLOR;
-        ctx.shadowBlur = 8 + pulse;
-        ctx.beginPath();
-        ctx.arc(c.x * GRID + GRID / 2, c.y * GRID + GRID / 2, GRID / 2 - 3 + pulse * 0.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
+        drawCoin(ctx, c.x * GRID, c.y * GRID, GRID, timestamp);
       });
 
-      // Player (blink when invincible)
-      const blink = state.invincible > 0 && Math.floor(timestamp / 80) % 2 === 0;
-      if (!blink) {
-        ctx.fillStyle = PLAYER_COLOR;
-        ctx.shadowColor = PLAYER_COLOR;
-        ctx.shadowBlur = 12;
-        const px = state.player.x * GRID + 2;
-        const py = state.player.y * GRID + 2;
-        const ps = GRID - 4;
-        ctx.beginPath();
-        ctx.roundRect(px, py, ps, ps, 4);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = "#1a1040";
-        ctx.fillRect(px + 4, py + 5, 3, 3);
-        ctx.fillRect(px + ps - 7, py + 5, 3, 3);
-        ctx.fillRect(px + 4, py + ps - 7, ps - 8, 2);
-      }
+      // Draw player
+      drawPlayer(ctx, state.player.x * GRID, state.player.y * GRID, GRID, state.invincible, timestamp);
 
-      // Particles
+      // Draw particles
       state.particles.forEach((p) => {
         ctx.globalAlpha = p.life;
         ctx.fillStyle = p.color;
+        ctx.shadowBlur = 0;
         ctx.beginPath();
         ctx.arc(p.x, p.y, 3 * p.life, 0, Math.PI * 2);
         ctx.fill();
@@ -306,7 +370,6 @@ export default function GameCanvas({ onScoreChange, onLivesChange, onGameOver, g
       width={canvasSize}
       height={canvasSize}
       className="rounded-xl border-2 border-border/50 shadow-lg shadow-primary/10 mx-auto block"
-      style={{ imageRendering: "pixelated" }}
       tabIndex={0}
     />
   );

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { loadServerSave, saveServerGame } from "../api/gameSaveClient";
 import StartScreen from "../components/game/StartScreen";
 import RPGGame from "../components/game/RPGGame";
-import { applyRunResultsToProfile, createMetaProfile, sanitizeMetaProfile, upgradeMetaProfile } from "../components/game/useRPGState";
+import { applyRunResultsToProfile, createMetaProfile, sanitizeMetaProfile } from "../components/game/useRPGState";
 import { useTelegramMiniApp } from "../lib/telegram-mini-app";
 
 const SAVE_KEY = "heros-journey-save";
@@ -161,20 +161,6 @@ export default function Game() {
     });
   }, [persistBundle]);
 
-  const handleUpgradeMeta = useCallback((upgradeId) => {
-    const currentBundle = saveBundleRef.current;
-    const nextProfile = upgradeMetaProfile(currentBundle.profile, upgradeId);
-
-    if (JSON.stringify(nextProfile) === JSON.stringify(currentBundle.profile)) {
-      return;
-    }
-
-    persistBundle({
-      ...currentBundle,
-      profile: nextProfile,
-    });
-  }, [persistBundle]);
-
   const handleStart = useCallback(() => {
     clearSave();
     setInitialGameState(null);
@@ -234,13 +220,11 @@ export default function Game() {
         <StartScreen
           onStart={handleStart}
           onContinue={handleContinue}
-          onUpgradeMeta={handleUpgradeMeta}
           hasSavedGame={Boolean(savedGame)}
           isSaveLoading={isSaveLoading}
           profile={profile}
           saveError={saveError}
           savedGame={savedGame}
-          saveSource={useServerSave ? "server" : "local"}
         />
       )}
       {screen === "game" && (

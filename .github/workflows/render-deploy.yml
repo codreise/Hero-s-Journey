@@ -1,0 +1,35 @@
+name: Deploy to Render (trigger)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  trigger-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger save-server deploy
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SAVE_SERVICE_ID: ${{ secrets.RENDER_SAVE_SERVICE_ID }}
+        run: |
+          echo "Triggering save-server deploy..."
+          curl -s -X POST "https://api.render.com/v1/services/${RENDER_SAVE_SERVICE_ID}/deploys" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{}' | jq || true
+
+      - name: Trigger bot deploy
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_BOT_SERVICE_ID: ${{ secrets.RENDER_BOT_SERVICE_ID }}
+        run: |
+          echo "Triggering bot deploy..."
+          curl -s -X POST "https://api.render.com/v1/services/${RENDER_BOT_SERVICE_ID}/deploys" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{}' | jq || true
+
+      - name: Done
+        run: echo "Render deploys requested. Check Render dashboard for progress."

@@ -69,8 +69,40 @@ function buildKeyboard(webAppUrl) {
   ]);
 }
 
+function createBot(token, webAppUrl) {
+  const bot = new Telegraf(token);
+
+  const sendMenu = async (ctx) => {
+    await ctx.reply(
+      "Hero's Journey is ready. Tap the button below to start playing:",
+      buildKeyboard(webAppUrl),
+    );
+  };
+
+  bot.start(async (ctx) => {
+    await sendMenu(ctx);
+  });
+
+  bot.command("play", async (ctx) => {
+    await sendMenu(ctx);
+  });
+
+  return bot;
+}
+
+function resolveWebhookDomain() {
+  return (
+    process.env.BOT_WEBHOOK_DOMAIN?.trim()
+    || process.env.RENDER_EXTERNAL_URL?.trim()
+    || ""
+  );
+}
+
 export async function startBot(options = {}) {
-  const { strict = false } = options;
+  const {
+    strict = false,
+    mode = "auto",
+  } = options;
 
   if (runningBot) {
     return runningBot;
@@ -100,27 +132,39 @@ export async function startBot(options = {}) {
 
   console.log("WebApp URL:", webAppUrl);
 
-  const bot = new Telegraf(token);
+  const bot = createBot(token, webAppUrl);
+  const webhookDomain = resolveWebhookDomain();
+  const shouldUseWebhook = mode === "webhook" || (mode === "auto" && Boolean(webhookDomain));
 
-  const sendMenu = async (ctx) => {
-    await ctx.reply(
-      "Hero's Journey is ready. Tap the button below to start playing:",
-      buildKeyboard(webAppUrl),
-    );
+  if (shouldUseWebhook) {
+    const webhookPath = `/telegram/webhook/${bot.secretPathComponent()}`;
+    const webhookUrl = `${webhookDomain.replace(/\/+$/, "")}${webhookPath}`;
+    await bot.telegram.setWebhook(webhookUrl, {
+      drop_pending_updates: true,
+    });
+
+    runningBot = {
+      bot,
+      mode: "webhook",
+      webhookPath,
+    };
+
+    console.log("Bot is running in webhook mode");
+    console.log("Bot webhook URL:", webhookUrl);
+    return runningBot;
+  }
+
+  await bot.launch({
+    dropPendingUpdates: true,
+  });
+
+  runningBot = {
+    bot,
+    mode: "polling",
+    webhookPath: "",
   };
 
-  bot.start(async (ctx) => {
-    await sendMenu(ctx);
-  });
-
-  bot.command("play", async (ctx) => {
-    await sendMenu(ctx);
-  });
-
-  await bot.launch();
-  runningBot = bot;
-
-  console.log("Bot is running");
+  console.log("Bot is running in polling mode");
 
   process.once("SIGINT", () => bot.stop("SIGINT"));
   process.once("SIGTERM", () => bot.stop("SIGTERM"));
@@ -128,10 +172,14 @@ export async function startBot(options = {}) {
   return bot;
 }
 
+export function getRunningBot() {
+  return runningBot;
+}
+
 const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : "";
 
 if (invokedPath === __filename) {
-  startBot({ strict: true }).catch((error) => {
+  startBot({ strict: true, mode: "polling" }).catch((error) => {
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   });
