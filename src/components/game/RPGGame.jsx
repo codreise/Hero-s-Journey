@@ -1,4 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import GameUI from "./GameUI";
+import MobileRPGControls from "./MobileRPGControls";
+import { useTelegramMiniApp } from "../../lib/telegram-mini-app";
 import {
   applyRewardChoice,
   awardExperience,
@@ -18,9 +21,6 @@ import {
   TILE,
   xpToNextLevel,
 } from "./useRPGState";
-import GameUI from "./GameUI";
-import MobileRPGControls from "./MobileRPGControls";
-import { useTelegramMiniApp } from "../../lib/telegram-mini-app";
 
 const FLOOR_COLOR = "#202725";
 const FLOOR_ALT = "#26302d";
